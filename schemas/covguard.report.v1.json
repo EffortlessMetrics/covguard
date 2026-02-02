@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:effortless:covguard.report.v1",
+  "title": "covguard.report.v1",
+  "allOf": [
+    {
+      "$ref": "./receipt.envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "covguard.report.v1"
+        },
+        "tool": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "covguard"
+            }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scope": {
+              "type": "string",
+              "enum": [
+                "added",
+                "touched"
+              ]
+            },
+            "threshold_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "changed_lines_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "covered_lines": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "uncovered_lines": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missing_lines": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "diff_coverage_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "ignored_lines_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "excluded_files_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inputs": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "diff_source": {
+                  "type": "string"
+                },
+                "diff_file": {
+                  "type": "string"
+                },
+                "base": {
+                  "type": "string"
+                },
+                "head": {
+                  "type": "string"
+                },
+                "lcov_paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "truncation": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "findings_truncated": {
+                  "type": "boolean"
+                },
+                "shown": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "debug": {
+              "description": "Optional debug payload (opaque).",
+              "type": [
+                "object",
+                "array",
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

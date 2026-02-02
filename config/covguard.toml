@@ -1,0 +1,22 @@
+# covguard.toml (example)
+profile = "team"          # oss|team|strict
+scope = "added"           # added|touched
+fail_on = "error"         # error|warn|never
+
+min_diff_coverage_pct = 80
+max_uncovered_lines = 25
+
+# How to treat missing coverage records
+missing_coverage = "warn" # skip|warn|fail
+missing_file = "warn"     # skip|warn|fail
+
+[paths]
+exclude = ["target/**", "**/generated/**", "vendor/**", "fixtures/**"]
+include = []              # optional allowlist
+
+[ignore]
+directives = true         # enable `covguard: ignore`
+
+[normalize]
+# Prefixes to strip from LCOV SF paths (useful in CI)
+path_strip = ["/home/runner/work/repo/repo/"]
