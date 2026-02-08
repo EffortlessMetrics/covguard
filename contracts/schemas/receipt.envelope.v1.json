@@ -88,6 +88,31 @@
               "type": "string"
             }
           }
+        },
+        "capabilities": {
+          "description": "Reports what inputs were available and processed (sensor.report.v1 compliance).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "inputs": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["status"],
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["available", "unavailable", "skipped"]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+$"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

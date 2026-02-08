@@ -1,0 +1,11 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 1111111..2222222
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,5 +1,2 @@
+ pub fn add(a: i32, b: i32) -> i32 {
+-    // This comment will be removed
+-    // And this one too
+-    // And this third one
+     a + b
+ }

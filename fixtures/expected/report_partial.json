@@ -1,0 +1,52 @@
+{
+  "schema": "covguard.report.v1",
+  "tool": {
+    "name": "covguard",
+    "version": "0.1.0"
+  },
+  "run": {
+    "started_at": "2026-02-02T00:00:00Z"
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": [
+      "uncovered_lines"
+    ]
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "message": "Uncovered changed line (hits=0).",
+      "location": {
+        "path": "src/lib.rs",
+        "line": 2
+      },
+      "data": {
+        "hits": 0
+      }
+    }
+  ],
+  "data": {
+    "scope": "added",
+    "threshold_pct": 80,
+    "changed_lines_total": 3,
+    "covered_lines": 2,
+    "uncovered_lines": 1,
+    "missing_lines": 0,
+    "diff_coverage_pct": 66.67,
+    "inputs": {
+      "diff_source": "diff-file",
+      "diff_file": "fixtures/diff/simple_added.patch",
+      "lcov_paths": [
+        "fixtures/lcov/partial_coverage.info"
+      ]
+    }
+  }
+}

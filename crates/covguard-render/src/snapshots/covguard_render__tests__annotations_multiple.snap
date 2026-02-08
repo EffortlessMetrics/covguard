@@ -1,0 +1,7 @@
+---
+source: crates/covguard-render/src/lib.rs
+expression: annotations
+---
+::error file=src/lib.rs,line=1::Uncovered changed line (hits=0)
+::error file=src/lib.rs,line=2::Uncovered changed line (hits=0)
+::error file=src/main.rs,line=10::Uncovered changed line (hits=0)

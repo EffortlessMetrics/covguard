@@ -1,0 +1,99 @@
+---
+source: crates/covguard-core/src/lib.rs
+expression: report_json
+---
+{
+  "data": {
+    "changed_lines_total": 3,
+    "covered_lines": 0,
+    "diff_coverage_pct": 0.0,
+    "inputs": {
+      "diff_file": "fixtures/diff/simple_added.patch",
+      "diff_source": "diff-file",
+      "lcov_paths": [
+        "fixtures/lcov/uncovered.info"
+      ]
+    },
+    "missing_lines": 0,
+    "scope": "added",
+    "threshold_pct": 80.0,
+    "uncovered_lines": 3
+  },
+  "findings": [
+    {
+      "check_id": "diff.coverage_below_threshold",
+      "code": "covguard.diff.coverage_below_threshold",
+      "data": {
+        "actual_pct": 0.0,
+        "threshold_pct": 80.0
+      },
+      "fingerprint": "6c18d8fbfefc01c0723fb41eb3f780c0998ba9e5c330486cadd25cfcd55af0db",
+      "message": "Diff coverage 0.0% is below threshold 80.0%.",
+      "severity": "error"
+    },
+    {
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "data": {
+        "hits": 0
+      },
+      "fingerprint": "093fb6ce4bb86c6ed235bdb2d75cecfba12a783a07039fe5495324f3448e8d6f",
+      "location": {
+        "line": 1,
+        "path": "src/lib.rs"
+      },
+      "message": "Uncovered changed line (hits=0).",
+      "severity": "error"
+    },
+    {
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "data": {
+        "hits": 0
+      },
+      "fingerprint": "6cf387b790a59a363792c0f904f0d52218112133c35d59914940c0e0c1674873",
+      "location": {
+        "line": 2,
+        "path": "src/lib.rs"
+      },
+      "message": "Uncovered changed line (hits=0).",
+      "severity": "error"
+    },
+    {
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "data": {
+        "hits": 0
+      },
+      "fingerprint": "b01a083c2c28cdd8b3ea384181ed19eaad88c530dd206a83853e3d1cc1baaa74",
+      "location": {
+        "line": 3,
+        "path": "src/lib.rs"
+      },
+      "message": "Uncovered changed line (hits=0).",
+      "severity": "error"
+    }
+  ],
+  "run": {
+    "duration_ms": 0,
+    "ended_at": "2026-02-02T00:00:00Z",
+    "started_at": "2026-02-02T00:00:00Z"
+  },
+  "schema": "covguard.report.v1",
+  "tool": {
+    "name": "covguard",
+    "version": "0.2.0"
+  },
+  "verdict": {
+    "counts": {
+      "error": 4,
+      "info": 0,
+      "warn": 0
+    },
+    "reasons": [
+      "uncovered_lines",
+      "below_threshold"
+    ],
+    "status": "fail"
+  }
+}
