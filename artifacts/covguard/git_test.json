@@ -1,0 +1,50 @@
+{
+  "schema": "covguard.report.v1",
+  "tool": {
+    "name": "covguard",
+    "version": "0.1.0"
+  },
+  "run": {
+    "started_at": "2026-02-03T10:13:19Z"
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": [
+      "below_threshold"
+    ]
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "diff.coverage_below_threshold",
+      "code": "covguard.diff.coverage_below_threshold",
+      "message": "Diff coverage 0.0% is below threshold 80.0%.",
+      "data": {
+        "actual_pct": 0.0,
+        "threshold_pct": 80.0
+      }
+    }
+  ],
+  "data": {
+    "scope": "added",
+    "threshold_pct": 80.0,
+    "changed_lines_total": 93,
+    "covered_lines": 0,
+    "uncovered_lines": 0,
+    "missing_lines": 93,
+    "diff_coverage_pct": 0.0,
+    "inputs": {
+      "diff_source": "git-refs",
+      "base": "HEAD~1",
+      "head": "HEAD",
+      "lcov_paths": [
+        "fixtures/lcov/covered.info"
+      ]
+    }
+  }
+}
