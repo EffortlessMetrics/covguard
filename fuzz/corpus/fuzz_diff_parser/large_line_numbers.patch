@@ -1,0 +1,9 @@
+diff --git a/src/huge_file.rs b/src/huge_file.rs
+index 0000000..1111111 100644
+--- a/src/huge_file.rs
++++ b/src/huge_file.rs
+@@ -999999,3 +999999,5 @@
+ // Line near u32 max range
+ fn large_line_number() {}
++fn added_at_huge_line_number() {}
++fn another_huge_line() {}

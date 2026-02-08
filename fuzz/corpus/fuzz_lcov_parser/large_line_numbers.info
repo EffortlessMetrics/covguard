@@ -1,0 +1,8 @@
+TN:
+SF:src/huge_file.rs
+DA:1,1
+DA:100000,1
+DA:500000,0
+DA:999999,1
+DA:1000000,0
+end_of_record

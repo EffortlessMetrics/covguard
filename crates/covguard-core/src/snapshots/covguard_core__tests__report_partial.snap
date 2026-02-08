@@ -1,0 +1,85 @@
+---
+source: crates/covguard-core/src/lib.rs
+expression: report_json
+---
+{
+  "data": {
+    "changed_lines_total": 5,
+    "covered_lines": 3,
+    "diff_coverage_pct": 60.0,
+    "inputs": {
+      "diff_file": "fixtures/diff/partial.patch",
+      "diff_source": "diff-file",
+      "lcov_paths": [
+        "fixtures/lcov/partial.info"
+      ]
+    },
+    "missing_lines": 0,
+    "scope": "added",
+    "threshold_pct": 80.0,
+    "uncovered_lines": 2
+  },
+  "findings": [
+    {
+      "check_id": "diff.coverage_below_threshold",
+      "code": "covguard.diff.coverage_below_threshold",
+      "data": {
+        "actual_pct": 60.0,
+        "threshold_pct": 80.0
+      },
+      "fingerprint": "6c18d8fbfefc01c0723fb41eb3f780c0998ba9e5c330486cadd25cfcd55af0db",
+      "message": "Diff coverage 60.0% is below threshold 80.0%.",
+      "severity": "error"
+    },
+    {
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "data": {
+        "hits": 0
+      },
+      "fingerprint": "cea60b46500cf48910d459b2eb96e1b8346c55337a38cd7f9b5dea7cf8732cb2",
+      "location": {
+        "line": 4,
+        "path": "src/lib.rs"
+      },
+      "message": "Uncovered changed line (hits=0).",
+      "severity": "error"
+    },
+    {
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "data": {
+        "hits": 0
+      },
+      "fingerprint": "5aeec01bfb89595d234eaf2eb90e6f0fb2785cbd988ee9788f4356d8cf9c900b",
+      "location": {
+        "line": 5,
+        "path": "src/lib.rs"
+      },
+      "message": "Uncovered changed line (hits=0).",
+      "severity": "error"
+    }
+  ],
+  "run": {
+    "duration_ms": 0,
+    "ended_at": "2026-02-02T00:00:00Z",
+    "started_at": "2026-02-02T00:00:00Z"
+  },
+  "schema": "covguard.report.v1",
+  "tool": {
+    "name": "covguard",
+    "version": "0.2.0"
+  },
+  "verdict": {
+    "counts": {
+      "error": 3,
+      "info": 0,
+      "warn": 0
+    },
+    "reasons": [
+      "uncovered_lines",
+      "below_threshold"
+    ],
+    "status": "fail"
+  }
+}

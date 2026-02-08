@@ -1,0 +1,43 @@
+---
+source: crates/covguard-core/src/lib.rs
+expression: report_json
+---
+{
+  "data": {
+    "changed_lines_total": 0,
+    "covered_lines": 0,
+    "diff_coverage_pct": 100.0,
+    "inputs": {
+      "diff_source": "stdin",
+      "lcov_paths": [
+        "fixtures/lcov/covered.info"
+      ]
+    },
+    "missing_lines": 0,
+    "scope": "added",
+    "threshold_pct": 80.0,
+    "uncovered_lines": 0
+  },
+  "findings": [],
+  "run": {
+    "duration_ms": 0,
+    "ended_at": "2026-02-02T00:00:00Z",
+    "started_at": "2026-02-02T00:00:00Z"
+  },
+  "schema": "covguard.report.v1",
+  "tool": {
+    "name": "covguard",
+    "version": "0.2.0"
+  },
+  "verdict": {
+    "counts": {
+      "error": 0,
+      "info": 0,
+      "warn": 0
+    },
+    "reasons": [
+      "no_changed_lines"
+    ],
+    "status": "pass"
+  }
+}

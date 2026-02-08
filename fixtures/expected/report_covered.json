@@ -2,7 +2,7 @@
   "schema": "covguard.report.v1",
   "tool": {
     "name": "covguard",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "run": {
     "started_at": "2026-02-02T00:00:00Z"
@@ -21,7 +21,7 @@
   "findings": [],
   "data": {
     "scope": "added",
-    "threshold_pct": 80,
+    "threshold_pct": 80.0,
     "changed_lines_total": 3,
     "covered_lines": 3,
     "uncovered_lines": 0,

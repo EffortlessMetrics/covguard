@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:effortless:sensor.report.v1",
+  "title": "sensor.report.v1",
+  "description": "Cockpit ecosystem sensor report schema. Extends receipt.envelope.v1 with sensor-specific constraints.",
+  "allOf": [
+    {
+      "$ref": "./receipt.envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "schema": {
+      "const": "sensor.report.v1"
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "description": "Reports what inputs were available and processed. Required for sensor.report.v1.",
+          "type": "object",
+          "required": ["inputs"],
+          "properties": {
+            "inputs": {
+              "type": "object",
+              "description": "For covguard: 'diff' and 'coverage' keys expected.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["status"],
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["available", "unavailable", "skipped"]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

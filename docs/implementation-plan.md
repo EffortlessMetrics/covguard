@@ -3,7 +3,15 @@
 This plan is sequenced to lock contracts early, keep PRs small, and maximize test leverage.
 Each phase lands with fixtures + schema + determinism gates.
 
-## Phase 0 — Scaffold + contracts
+## Status Legend
+
+- ✅ Complete
+- 🚧 In Progress
+- ⏳ Planned
+
+---
+
+## Phase 0 — Scaffold + contracts ✅
 Deliverables:
 - Workspace skeleton with microcrates:
   - types/domain/adapters-diff/adapters-coverage/render/app/cli/xtask
@@ -21,7 +29,7 @@ Acceptance:
 - `covguard check --diff-file fixtures/diff/simple_added.patch --lcov fixtures/lcov/uncovered.info`
   produces a valid report.json that validates against schema.
 
-## Phase 1 — Diff parsing + normalization
+## Phase 1 — Diff parsing + normalization ✅
 Scope:
 - Patch diff parser (unified diff)
 - Range merging + deterministic ordering
@@ -45,7 +53,7 @@ Acceptance:
 - Changed ranges match expected output for fixture diffs.
 - Windows CRLF diffs parse without flakiness.
 
-## Phase 2 — LCOV parsing + normalization
+## Phase 2 — LCOV parsing + normalization ✅
 Scope:
 - LCOV parser with records per SF
 - hits map by (path,line)
@@ -64,7 +72,7 @@ Acceptance:
 - Coverage map matches fixtures.
 - Invalid LCOV produces tool/runtime error receipt (exit 1 + tool.runtime_error finding).
 
-## Phase 3 — Domain evaluation
+## Phase 3 — Domain evaluation ✅
 Scope:
 - Evaluate in-scope changed lines against coverage hits
 - Policies:
@@ -89,7 +97,7 @@ Acceptance:
 - Stable findings and summary metrics for fixtures.
 - Deterministic ordering enforced.
 
-## Phase 4 — Rendering (markdown + annotations)
+## Phase 4 — Rendering (markdown + annotations) ✅
 Scope:
 - Markdown renderer:
   - short summary + top N uncovered lines
@@ -109,7 +117,7 @@ Acceptance:
 - comment.md is PR-friendly and capped.
 - annotations are stable and limited.
 
-## Phase 5 — Ignore directives
+## Phase 5 — Ignore directives ✅
 Scope:
 - RepoReader adapter reads head files
 - Implement `covguard: ignore` directive (line-level)
@@ -125,7 +133,7 @@ Tests:
 Acceptance:
 - ignore directives prevent false positives without disabling the tool.
 
-## Phase 6 — SARIF renderer (optional, high ROI)
+## Phase 6 — SARIF renderer ✅
 Scope:
 - SARIF output from report.json (renderer-only)
 - Rule metadata: help/url for codes
@@ -136,7 +144,7 @@ Tests:
 Acceptance:
 - SARIF integrates with GitHub code scanning UI.
 
-## Phase 7 — Config + profiles
+## Phase 7 — Config + profiles ✅
 Scope:
 - covguard.toml parsing
 - precedence: CLI > config > defaults
@@ -152,7 +160,7 @@ Acceptance:
 - ergonomics match other sensors in the ecosystem
 - adoption valve works as intended
 
-## Phase 8 — Ecosystem conformance (always-on)
+## Phase 8 — Ecosystem conformance ✅
 Ongoing requirements:
 - receipt validates against schemas
 - deterministic output tests remain green

@@ -1,0 +1,15 @@
+[package]
+name = "covguard-config"
+description = "Configuration parsing, profiles, and CLI precedence resolution for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+toml.workspace = true
+thiserror.workspace = true
+glob.workspace = true
