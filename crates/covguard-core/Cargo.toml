@@ -1,0 +1,30 @@
+[package]
+name = "covguard-core"
+description = "High-level orchestration layer for covguard diff coverage analysis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+covguard-types = { path = "../covguard-types" }
+covguard-domain = { path = "../covguard-domain" }
+covguard-adapters-diff = { path = "../covguard-adapters-diff" }
+covguard-adapters-coverage = { path = "../covguard-adapters-coverage" }
+covguard-render = { path = "../covguard-render" }
+covguard-config = { path = "../covguard-config" }
+thiserror.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+insta = { workspace = true }
+jsonschema = "0.41.0"
+cucumber = { workspace = true }
+futures = { workspace = true }
+
+[[test]]
+name = "bdd"
+harness = false

@@ -1,0 +1,106 @@
+---
+source: crates/covguard-render/src/lib.rs
+expression: sarif_value
+---
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "results": [],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/covguard/covguard",
+          "name": "covguard",
+          "rules": [
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "A changed line has zero hits in LCOV coverage data."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#uncovered_line",
+              "id": "covguard.diff.uncovered_line",
+              "name": "UncoveredLine",
+              "shortDescription": {
+                "text": "Uncovered changed line"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "Diff-scoped coverage percentage is below the configured threshold."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#coverage_below_threshold",
+              "id": "covguard.diff.coverage_below_threshold",
+              "name": "CoverageBelowThreshold",
+              "shortDescription": {
+                "text": "Diff coverage below threshold"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "A changed file has no LCOV record."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#missing_coverage_for_file",
+              "id": "covguard.diff.missing_coverage_for_file",
+              "name": "MissingCoverageForFile",
+              "shortDescription": {
+                "text": "Missing coverage for file"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "LCOV input could not be parsed as valid LCOV format."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#invalid_lcov",
+              "id": "covguard.input.invalid_lcov",
+              "name": "InvalidLcov",
+              "shortDescription": {
+                "text": "Invalid LCOV input"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "Diff input could not be parsed as a unified diff."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#invalid_diff",
+              "id": "covguard.input.invalid_diff",
+              "name": "InvalidDiff",
+              "shortDescription": {
+                "text": "Invalid diff input"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "covguard failed due to a runtime or internal error."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#runtime_error",
+              "id": "tool.runtime_error",
+              "name": "RuntimeError",
+              "shortDescription": {
+                "text": "Tool runtime error"
+              }
+            }
+          ],
+          "version": "0.1.0"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

@@ -13,6 +13,22 @@ target
 # Contains mutation testing data
 **/mutants.out*/
 
+# Generated artifacts (coverage reports, markdown comments)
+artifacts/
+
+# Fuzz testing artifacts
+fuzz/artifacts/
+fuzz/target/
+fuzz/Cargo.lock
+fuzz/corpus/**/crash-*
+fuzz/corpus/**/leak-*
+fuzz/corpus/**/timeout-*
+
+# Coverage profiling data
+*.profraw
+*.profdata
+lcov.info
+
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

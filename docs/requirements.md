@@ -5,7 +5,7 @@ covguard answers one reviewer question with minimal noise:
 
 > “Did this PR add or change lines that are not covered by tests?”
 
-It consumes coverage (LCOV) and a diff (base↔head or patch) and emits a receipt suitable for cockpit ingestion.
+covguard is a diff-scoped coverage gate that answers whether changed lines are covered by tests by consuming a diff (base<->head or patch) and LCOV coverage and emitting a canonical receipt plus optional PR outputs (markdown, annotations, SARIF).
 
 ## Truth layer
 Build truth (consumer), diff-scoped presentation.
@@ -93,12 +93,36 @@ Missing inputs:
 - ignore directives enabled/disabled
 - fail_on: `error | warn | never` (standalone behavior; cockpit can override via composition policy)
 
-## CLI (stable surface)
-- `covguard check`
-- `covguard md --report <report.json>`
-- `covguard annotations --report <report.json>` (GitHub workflow commands)
-- `covguard sarif --report <report.json>` (optional renderer)
-- `covguard explain <check_id|code>`
+## CLI (implemented)
+
+### `covguard check` (primary command)
+
+```bash
+covguard check \
+  --diff-file <path>           # OR --base <ref> --head <ref>
+  --lcov <path>                # Required, repeatable
+  --out <path>                 # Default: artifacts/covguard/report.json
+  --md <path>                  # Optional markdown output
+  --sarif <path>               # Optional SARIF output
+  --raw                        # Save raw diff/lcov to artifacts/covguard/raw
+  --root <path>                # Repo root for ignore directives + git diff
+  --path-strip <prefix>        # Repeatable path prefix to strip from LCOV SF paths
+  --config <path>              # Optional config file (auto-discovers covguard.toml)
+  --profile <oss|moderate|team|strict>
+  --scope <added|touched>
+  --threshold <0-100>
+  --no-ignore                  # Disable ignore directives
+```
+
+Outputs:
+- Writes `report.json` to `--out` path
+- Writes markdown to `--md` path if specified
+- Writes SARIF to `--sarif` path if specified
+- Prints GitHub annotations to stdout
+
+### `covguard explain <code>` (implemented)
+
+Shows remediation guidance and documentation links for error codes.
 
 ## Exit codes
 - 0: pass (or warn when warn is not configured to fail)

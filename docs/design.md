@@ -206,17 +206,21 @@ Emit SARIF results for uncovered lines and policy failures:
 - Missing base commit due to shallow clone: warn/skip with remediation (unless configured to fail).
 - Path mismatch between diff and LCOV: warn and show applied strips; do not silently pass.
 
-## Microcrate layout
-Recommended workspace:
-- covguard-types: DTOs, schema ids, codes, serde/schemars
-- covguard-domain: policy eval, aggregation, determinism helpers
-- covguard-ports: traits (DiffProvider, CoverageProvider, RepoReader, Clock, ArtifactWriter) (optional crate)
-- covguard-adapters-diff: git diff + patch parsing
-- covguard-adapters-coverage: LCOV parsing
-- covguard-render: markdown/annotations/sarif renderers (from report)
-- covguard-app: orchestration (use-case wiring)
-- covguard-cli: clap + IO + exit mapping
-- xtask: schema generation, fixtures, release helpers
+## Crate Layout (Implemented)
+
+| Crate | Responsibility |
+|-------|----------------|
+| **covguard-types** | DTOs (Report, Finding, Verdict), schema IDs, error codes, serde |
+| **covguard-domain** | Policy evaluation, metrics aggregation, deterministic ordering, ignore directive detection |
+| **covguard-config** | TOML parsing, profiles (Oss/Moderate/Team/Strict), precedence resolution |
+| **covguard-adapters-diff** | Unified diff parsing, path normalization, range merging |
+| **covguard-adapters-coverage** | LCOV parsing, coverage map merging |
+| **covguard-render** | Markdown, GitHub annotations, SARIF renderers |
+| **covguard-app** | Orchestration, Clock/RepoReader traits, `check()` entry point |
+| **covguard-cli** | Clap CLI, file I/O, exit code mapping |
+| **xtask** | Schema generation, fixture management |
+
+See `docs/architecture.md` for the full dependency graph and crate details.
 
 ## Test strategy
 - Unit tests: parsers, normalization, policy edge cases

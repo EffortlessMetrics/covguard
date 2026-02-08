@@ -103,56 +103,58 @@ Truncation MUST be explicit:
 - report-level `data.truncation`
 - markdown includes “... truncated” marker
 
-## Microcrate plan (workspace)
-Recommended layout:
+## Crate Structure (Implemented)
 
-- `covguard-types`
-  - DTOs for receipts, findings, policy, summary
-  - schema id constants and code constants
+```
+covguard-cli (entry point)
+    │
+    ▼
+covguard-app (orchestration)
+    ├── covguard-adapters-diff
+    ├── covguard-adapters-coverage
+    ├── covguard-domain ──► covguard-types
+    ├── covguard-render ──► covguard-types
+    └── covguard-config
+            │
+            ▼
+        covguard-types
+```
 
-- `covguard-domain`
-  - policy evaluation
-  - metrics aggregation
-  - deterministic ordering utilities
+### Crate Descriptions
 
-- `covguard-ports` (optional)
-  - port traits; can live in domain if you prefer fewer crates
+| Crate | Purpose |
+|-------|---------|
+| **covguard-types** | DTOs for reports, findings, verdicts, severity. Schema IDs and error code constants. |
+| **covguard-domain** | Pure policy evaluation. Takes changed ranges + coverage map + policy, produces findings + verdict + metrics. No I/O. |
+| **covguard-config** | TOML configuration parsing, profile defaults (Oss/Moderate/Team/Strict), precedence resolution (CLI > file > profile > defaults). |
+| **covguard-adapters-diff** | Unified diff parsing, path normalization, range merging. Handles renames, deletions, CRLF. |
+| **covguard-adapters-coverage** | LCOV parsing, path normalization, coverage map merging (max hits). |
+| **covguard-render** | Renderers: Markdown (PR comments), GitHub annotations, SARIF 2.1.0. |
+| **covguard-app** | Orchestration layer. Wires adapters to domain, provides `check()` entry point, handles ignore directive detection. |
+| **covguard-cli** | Clap-based CLI. Argument parsing, config discovery, file I/O, exit code mapping. |
+| **xtask** | Build automation: schema generation, fixture management. |
 
-- `covguard-adapters-diff`
-  - diff acquisition (git) and parsing
-  - rename handling
-  - canonical path normalization
+### Dependency Rules
 
-- `covguard-adapters-coverage`
-  - LCOV parsing
-  - canonical path normalization
+- **covguard-types**: No internal dependencies (leaf crate)
+- **covguard-domain**: Depends only on covguard-types
+- **covguard-config**: Depends on covguard-types (for Scope enum)
+- **covguard-adapters-***: Standalone parsers, no internal dependencies
+- **covguard-render**: Depends on covguard-types
+- **covguard-app**: Depends on all crates except CLI
+- **covguard-cli**: Depends on app + config + types
 
-- `covguard-render`
-  - renderers from report: markdown, annotations, sarif
+### Port Traits (in covguard-app)
 
-- `covguard-app`
-  - use-cases that wire ports together
-  - inject Clock and budgets
+Port traits live in covguard-app rather than a separate crate:
 
-- `covguard-cli`
-  - clap + filesystem IO
-  - exit code mapping
-  - artifact layout
-
-- `xtask`
-  - schema generation
-  - fixture management
-  - release helpers
-
-Dependency rules:
-- domain depends only on types (and maybe ports)
-- adapters depend on domain/types
-- CLI depends on app + adapters + render
+- **Clock**: `fn now() -> DateTime` — Injected for deterministic tests
+- **RepoReader**: `fn read_lines(path, lines) -> HashMap<u32, String>` — For ignore directive detection
 
 ## Schema management
 Ship schemas in-repo:
-- `schemas/receipt.envelope.v1.json` (vendored contract)
-- `schemas/covguard.report.v1.json`
+- `contracts/schemas/receipt.envelope.v1.json` (vendored contract)
+- `contracts/schemas/covguard.report.v1.json`
 
 CI validates:
 - fixtures output validates against covguard schema

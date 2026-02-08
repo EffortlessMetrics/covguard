@@ -1,0 +1,5 @@
+diff --git a/src/empty.rs b/src/empty.rs
+index 0000000..1111111 100644
+--- a/src/empty.rs
++++ b/src/empty.rs
+@@ -1,0 +1,0 @@

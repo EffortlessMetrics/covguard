@@ -1,0 +1,78 @@
+# cargo-mutants configuration for covguard
+# https://mutants.rs/
+#
+# This configuration focuses mutation testing on the domain logic where
+# correctness is most critical. Run with: cargo mutants
+#
+# Quick start:
+#   cargo install cargo-mutants
+#   cargo mutants              # Run all mutations
+#   cargo mutants --list       # List mutations without running
+#   cargo mutants -j4          # Run with 4 parallel jobs
+
+# ============================================================================
+# Packages to Mutate
+# ============================================================================
+# Focus on the domain crate where verdict logic and policy evaluation live.
+# These are the critical paths where bugs would cause incorrect pass/fail decisions.
+
+examine_globs = [
+    "crates/covguard-domain/src/**/*.rs",
+]
+
+# ============================================================================
+# Exclusions
+# ============================================================================
+# Exclude test code, benchmarks, and generated code from mutation.
+
+exclude_globs = [
+    # Test modules (inline #[cfg(test)] blocks are excluded automatically)
+    "**/tests/**",
+    "**/test_*.rs",
+    "**/*_test.rs",
+
+    # Benchmarks
+    "**/benches/**",
+
+    # Build and generated code
+    "**/build.rs",
+    "**/target/**",
+
+    # Fuzz targets
+    "fuzz/**",
+
+    # Examples
+    "**/examples/**",
+]
+
+# ============================================================================
+# Function-Level Exclusions
+# ============================================================================
+# Skip functions that are not worth mutating (formatting, display, trivial getters).
+
+exclude_re = [
+    # Display/formatting implementations
+    "::fmt$",
+
+    # Trivial accessors - regex matches against function name in output
+    # e.g. "Scope::as_str -> &'static str"
+    "::as_str ->",
+
+    # Default implementations (already tested via struct tests)
+    "::default ->",
+
+    # Test helper functions (in #[cfg(test)] modules - already excluded by cargo-mutants)
+]
+
+# ============================================================================
+# Critical Functions (for documentation - implicitly covered by examine_globs)
+# ============================================================================
+# These functions contain the core verdict logic and policy evaluation.
+# Mutations here are most likely to catch real bugs.
+#
+# High-priority targets:
+# - evaluate()              - Main entry point for policy evaluation
+# - determine_verdict()     - Maps findings to pass/warn/fail verdict
+# - calc_coverage_pct()     - Percentage calculation with edge cases
+# - sort_findings()         - Deterministic ordering requirement
+# - has_ignore_directive()  - Directive parsing for ignore comments

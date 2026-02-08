@@ -1,6 +1,6 @@
 # covguard
 
-Diff-scoped coverage gate for pull requests.
+covguard is a diff-scoped coverage gate that answers whether changed lines are covered by tests by consuming a diff (base<->head or patch) and LCOV coverage and emitting a canonical receipt plus optional PR outputs (markdown, annotations, SARIF).
 
 covguard consumes:
 - a **diff** (base↔head or patch file)
@@ -47,6 +47,15 @@ covguard check \
   --md artifacts/covguard/comment.md
 ```
 
+### 3) With stdin patch
+
+```bash
+git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" | covguard check \
+  --lcov artifacts/coverage/lcov.info \
+  --out artifacts/covguard/report.json \
+  --md artifacts/covguard/comment.md
+```
+
 > CI note: shallow clones frequently break `--base/--head` if the base commit is missing.
 > Prefer `fetch-depth: 0` or explicitly fetch the base SHA.
 
@@ -61,7 +70,7 @@ artifacts/covguard/
   report.json        # canonical receipt (envelope-compliant)
   comment.md         # optional
   sarif.json         # optional
-  raw/               # optional debug copies (diff/lcov) if enabled
+  raw/               # optional debug copies (diff/lcov) if enabled via --raw
 ```
 
 ---
@@ -103,6 +112,5 @@ Docs:
 - `docs/implementation-plan.md`
 
 Schemas:
-- `schemas/receipt.envelope.v1.json`
-- `schemas/covguard.report.v1.json`
-
+- `contracts/schemas/receipt.envelope.v1.json`
+- `contracts/schemas/covguard.report.v1.json`

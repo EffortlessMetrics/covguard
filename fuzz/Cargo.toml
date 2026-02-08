@@ -1,0 +1,32 @@
+[package]
+name = "covguard-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.10"
+covguard-adapters-diff = { path = "../crates/covguard-adapters-diff" }
+covguard-adapters-coverage = { path = "../crates/covguard-adapters-coverage" }
+arbitrary = { version = "1.4.2", features = ["derive"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_diff_parser"
+path = "fuzz_targets/fuzz_diff_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lcov_parser"
+path = "fuzz_targets/fuzz_lcov_parser.rs"
+test = false
+doc = false
+bench = false

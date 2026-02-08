@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+description = "Development tasks for covguard"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+covguard-types = { path = "../crates/covguard-types" }
+clap = { version = "4.5.57", features = ["derive"] }
+serde_json.workspace = true
+jsonschema = "0.41.0"
+anyhow = "1.0.101"

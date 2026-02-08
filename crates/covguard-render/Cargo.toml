@@ -1,0 +1,17 @@
+[package]
+name = "covguard-render"
+description = "Output rendering (Markdown, GitHub annotations, SARIF) for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+covguard-types = { path = "../covguard-types" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+insta = { workspace = true }

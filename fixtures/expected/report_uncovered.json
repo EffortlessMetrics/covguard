@@ -2,7 +2,7 @@
   "schema": "covguard.report.v1",
   "tool": {
     "name": "covguard",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "run": {
     "started_at": "2026-02-02T00:00:00Z"
@@ -30,7 +30,8 @@
       },
       "data": {
         "hits": 0
-      }
+      },
+      "fingerprint": "093fb6ce4bb86c6ed235bdb2d75cecfba12a783a07039fe5495324f3448e8d6f"
     },
     {
       "severity": "error",
@@ -43,7 +44,8 @@
       },
       "data": {
         "hits": 0
-      }
+      },
+      "fingerprint": "6cf387b790a59a363792c0f904f0d52218112133c35d59914940c0e0c1674873"
     },
     {
       "severity": "error",
@@ -56,12 +58,13 @@
       },
       "data": {
         "hits": 0
-      }
+      },
+      "fingerprint": "b01a083c2c28cdd8b3ea384181ed19eaad88c530dd206a83853e3d1cc1baaa74"
     }
   ],
   "data": {
     "scope": "added",
-    "threshold_pct": 80,
+    "threshold_pct": 80.0,
     "changed_lines_total": 3,
     "covered_lines": 0,
     "uncovered_lines": 3,

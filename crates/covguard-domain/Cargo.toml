@@ -1,0 +1,16 @@
+[package]
+name = "covguard-domain"
+description = "Pure domain logic for covguard diff coverage policy evaluation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+covguard-types = { path = "../covguard-types" }
+serde_json.workspace = true
+
+[dev-dependencies]
+proptest = "1.10.0"

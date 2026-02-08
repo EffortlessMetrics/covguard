@@ -1,0 +1,30 @@
+---
+source: crates/covguard-render/src/lib.rs
+expression: md
+---
+## covguard: Diff Coverage Report
+
+**Status**: ⚠️ warn
+
+### Summary
+- **Diff coverage**: 66.7%
+- **Changed lines**: 3
+- **Covered**: 2
+- **Uncovered**: 1
+
+### Uncovered Lines
+
+| File | Line | Hits |
+|------|------|------|
+| src/lib.rs | 1 | 0 |
+
+<details>
+<summary>Reproduce locally</summary>
+
+```bash
+covguard check \
+  --diff-file fixtures/diff/simple_added.patch \
+  --lcov fixtures/lcov/uncovered.info
+```
+
+</details>

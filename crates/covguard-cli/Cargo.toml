@@ -1,0 +1,31 @@
+[package]
+name = "covguard"
+description = "Diff-scoped coverage gate for pull requests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "covguard"
+path = "src/main.rs"
+
+[dependencies]
+covguard-types = { path = "../covguard-types" }
+covguard-core = { path = "../covguard-core" }
+covguard-config = { path = "../covguard-config" }
+clap = { version = "4.5.57", features = ["derive"] }
+chrono.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.1.2"
+predicates = "3.1.3"
+tempfile = "3.24.0"
+serde_json = { workspace = true }
+proptest = "1.10.0"

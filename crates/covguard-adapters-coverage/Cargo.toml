@@ -1,0 +1,15 @@
+[package]
+name = "covguard-adapters-coverage"
+description = "LCOV coverage file parsing adapter for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest = "1.10.0"

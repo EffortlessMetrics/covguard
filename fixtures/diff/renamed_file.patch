@@ -1,0 +1,17 @@
+diff --git a/src/old_utils.rs b/src/utils.rs
+similarity index 80%
+rename from src/old_utils.rs
+rename to src/utils.rs
+index 2222222..3333333 100644
+--- a/src/old_utils.rs
++++ b/src/utils.rs
+@@ -1,5 +1,7 @@
+-pub fn helper() -> bool {
+-    true
++pub fn helper(value: i32) -> bool {
++    value > 0
++}
++
++pub fn validate(input: &str) -> bool {
++    !input.is_empty()
+ }

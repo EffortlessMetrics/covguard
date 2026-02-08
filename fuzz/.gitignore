@@ -1,0 +1,15 @@
+# Fuzz-specific .gitignore
+# NOTE: Most artifacts are already ignored by the root .gitignore:
+#   - fuzz/target/
+#   - fuzz/artifacts/
+#   - fuzz/Cargo.lock
+#   - fuzz/corpus/**/crash-*, leak-*, timeout-*
+
+# Fuzzer-generated corpus entries (auto-discovered inputs)
+# These are hex-named files created by libFuzzer during runs.
+# We only track hand-curated seed files, not auto-generated inputs.
+corpus/**/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
+
+# Coverage profiling data
+*.profraw
+*.profdata
