@@ -435,15 +435,28 @@ pub fn should_include_path(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_parse_minimal_config() {
+    #[test] fn test_default_true_returns_true() {
+        assert!(default_true());
+    }
+    #[test] fn test_effective_config_default_values() {
+        let defaults = EffectiveConfig::default();
+        assert_eq!(defaults.scope, Scope::Added);
+        assert_eq!(defaults.fail_on, FailOn::Error);
+        assert_eq!(defaults.threshold_pct, 80.0);
+        assert_eq!(defaults.max_uncovered_lines, None);
+        assert_eq!(defaults.missing_coverage, MissingBehavior::Warn);
+        assert_eq!(defaults.missing_file, MissingBehavior::Warn);
+        assert!(defaults.exclude_patterns.is_empty());
+        assert!(defaults.include_patterns.is_empty());
+        assert!(defaults.ignore_directives);
+        assert!(defaults.path_strip.is_empty());
+    }
+    #[test] fn test_parse_minimal_config() {
         let config = parse_config("").unwrap();
         assert!(config.profile.is_none());
         assert!(config.scope.is_none());
     }
-
-    #[test]
-    fn test_parse_full_config() {
+    #[test] fn test_parse_full_config() {
         let toml = r#"
 profile = "strict"
 scope = "touched"
@@ -477,16 +490,12 @@ path_strip = ["/home/runner/"]
         assert!(!config.ignore_config.directives);
         assert_eq!(config.normalize.path_strip, vec!["/home/runner/"]);
     }
-
-    #[test]
-    fn test_invalid_threshold() {
+    #[test] fn test_invalid_threshold() {
         let toml = "min_diff_coverage_pct = 150";
         let result = parse_config(toml);
         assert!(result.is_err());
     }
-
-    #[test]
-    fn test_profile_defaults_oss() {
+    #[test] fn test_profile_defaults_oss() {
         let defaults = profile_defaults(Profile::Oss);
         assert_eq!(defaults.fail_on, FailOn::Never);
         assert_eq!(defaults.threshold_pct, 70.0);
@@ -494,9 +503,7 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Skip);
         assert_eq!(defaults.scope, Scope::Added);
     }
-
-    #[test]
-    fn test_profile_defaults_moderate() {
+    #[test] fn test_profile_defaults_moderate() {
         let defaults = profile_defaults(Profile::Moderate);
         assert_eq!(defaults.fail_on, FailOn::Error);
         assert_eq!(defaults.threshold_pct, 75.0);
@@ -504,9 +511,7 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Skip);
         assert_eq!(defaults.scope, Scope::Added);
     }
-
-    #[test]
-    fn test_profile_defaults_team() {
+    #[test] fn test_profile_defaults_team() {
         let defaults = profile_defaults(Profile::Team);
         assert_eq!(defaults.fail_on, FailOn::Error);
         assert_eq!(defaults.threshold_pct, 80.0);
@@ -514,9 +519,7 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Warn);
         assert_eq!(defaults.scope, Scope::Added);
     }
-
-    #[test]
-    fn test_profile_defaults_strict() {
+    #[test] fn test_profile_defaults_strict() {
         let defaults = profile_defaults(Profile::Strict);
         assert_eq!(defaults.fail_on, FailOn::Error);
         assert_eq!(defaults.threshold_pct, 90.0);
@@ -525,23 +528,69 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Fail);
         assert_eq!(defaults.scope, Scope::Touched);
     }
-
-    #[test]
-    fn test_resolve_config_cli_overrides() {
+    #[test] fn test_resolve_config_cli_overrides() {
         let config = parse_config("min_diff_coverage_pct = 70").unwrap();
         let cli = CliOverrides {
             threshold_pct: Some(85.0),
             ..Default::default()
         };
-
         let effective = resolve_config(Some(&config), &cli);
 
-        // CLI should override config
         assert_eq!(effective.threshold_pct, 85.0);
     }
+    #[test] fn test_resolve_config_applies_config_fields() {
+        let toml = r#"
+profile = "moderate"
+scope = "touched"
+fail_on = "warn"
+min_diff_coverage_pct = 66
+max_uncovered_lines = 12
+missing_coverage = "skip"
+missing_file = "fail"
 
-    #[test]
-    fn test_resolve_config_no_config() {
+[paths]
+exclude = ["target/**"]
+include = ["src/**"]
+
+[ignore]
+directives = false
+
+[normalize]
+path_strip = ["/workspace/"]
+"#;
+        let config = parse_config(toml).unwrap();
+        let cli = CliOverrides::default();
+        let effective = resolve_config(Some(&config), &cli);
+        assert_eq!(effective.scope, Scope::Touched);
+        assert_eq!(effective.fail_on, FailOn::Warn);
+        assert_eq!(effective.threshold_pct, 66.0);
+        assert_eq!(effective.max_uncovered_lines, Some(12));
+        assert_eq!(effective.missing_coverage, MissingBehavior::Skip);
+        assert_eq!(effective.missing_file, MissingBehavior::Fail);
+        assert_eq!(effective.exclude_patterns, vec!["target/**"]);
+        assert_eq!(effective.include_patterns, vec!["src/**"]);
+        assert!(!effective.ignore_directives);
+        assert_eq!(effective.path_strip, vec!["/workspace/"]);
+    }
+    #[test] fn test_resolve_config_cli_overrides_all_fields() {
+        let config = parse_config("min_diff_coverage_pct = 70").unwrap();
+        let cli = CliOverrides {
+            scope: Some(Scope::Touched),
+            fail_on: Some(FailOn::Warn),
+            threshold_pct: Some(85.0),
+            max_uncovered_lines: Some(9),
+            ignore_directives: Some(false),
+            path_strip: Some(vec!["/tmp/".to_string()]),
+        };
+        let effective = resolve_config(Some(&config), &cli);
+        assert_eq!(effective.scope, Scope::Touched);
+        assert_eq!(effective.fail_on, FailOn::Warn);
+        assert_eq!(effective.threshold_pct, 85.0);
+        assert_eq!(effective.max_uncovered_lines, Some(9));
+        assert!(!effective.ignore_directives);
+        assert_eq!(effective.path_strip, vec!["/tmp/"]);
+    }
+    #[test] fn test_resolve_config_no_config() {
         let cli = CliOverrides::default();
         let effective = resolve_config(None, &cli);
 
@@ -549,9 +598,7 @@ path_strip = ["/home/runner/"]
         assert_eq!(effective.threshold_pct, 80.0);
         assert_eq!(effective.fail_on, FailOn::Error);
     }
-
-    #[test]
-    fn test_matches_any_pattern() {
+    #[test] fn test_matches_any_pattern() {
         assert!(matches_any_pattern(
             "target/debug/foo",
             &["target/**".to_string()]
@@ -565,9 +612,7 @@ path_strip = ["/home/runner/"]
             &["target/**".to_string()]
         ));
     }
-
-    #[test]
-    fn test_should_include_path() {
+    #[test] fn test_should_include_path() {
         let exclude = vec!["target/**".to_string(), "vendor/**".to_string()];
         let include = vec![];
 
@@ -575,13 +620,38 @@ path_strip = ["/home/runner/"]
         assert!(!should_include_path("target/debug/foo", &include, &exclude));
         assert!(!should_include_path("vendor/lib.rs", &include, &exclude));
     }
-
-    #[test]
-    fn test_should_include_path_with_allowlist() {
+    #[test] fn test_should_include_path_with_allowlist() {
         let exclude = vec![];
         let include = vec!["src/**".to_string()];
 
         assert!(should_include_path("src/lib.rs", &include, &exclude));
         assert!(!should_include_path("tests/test.rs", &include, &exclude));
+    }
+    #[test] fn test_load_and_discover_config() {
+        use std::fs;
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("covguard-config-{unique}"));
+        let nested = root.join("child");
+        fs::create_dir_all(&nested).expect("create temp dirs");
+
+        let config_path = root.join("covguard.toml");
+        fs::write(&config_path, "min_diff_coverage_pct = 72").expect("write config");
+
+        let loaded = load_config(&config_path).expect("load config");
+        assert_eq!(loaded.min_diff_coverage_pct, Some(72.0));
+
+        let original_dir = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(&nested).expect("set current dir");
+        let discovered = discover_config().expect("discover config");
+        std::env::set_current_dir(original_dir).expect("restore current dir");
+
+        assert_eq!(discovered.0, config_path);
+        assert_eq!(discovered.1.min_diff_coverage_pct, Some(72.0));
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

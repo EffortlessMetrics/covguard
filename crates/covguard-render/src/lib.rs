@@ -743,12 +743,7 @@ mod tests {
         ];
 
         for section in expected_sections {
-            assert!(
-                md.contains(section),
-                "Missing section: {}\nActual output:\n{}",
-                section,
-                md
-            );
+            assert!(md.contains(section));
         }
     }
 
@@ -1360,11 +1355,10 @@ mod tests {
         assert!(line.starts_with("::"));
 
         // Must have level (error, warning, notice)
-        assert!(
-            line.starts_with("::error ")
-                || line.starts_with("::warning ")
-                || line.starts_with("::notice ")
-        );
+        let has_valid_prefix = line.starts_with("::error ")
+            || line.starts_with("::warning ")
+            || line.starts_with("::notice ");
+        assert!(has_valid_prefix);
 
         // Must have file= parameter
         assert!(line.contains("file="));
@@ -1422,11 +1416,7 @@ mod tests {
         let annotations = render_annotations(&report, 25);
 
         for line in annotations.lines() {
-            assert!(
-                !line.ends_with(' '),
-                "Line should not end with whitespace: {:?}",
-                line
-            );
+            assert!(!line.ends_with(' '));
         }
     }
 
@@ -1550,7 +1540,7 @@ mod tests {
                 for loc in locations {
                     if let Some(region) = loc["physicalLocation"].get("region") {
                         let start_line = region["startLine"].as_u64().unwrap();
-                        assert!(start_line > 0, "startLine must be positive");
+                        assert!(start_line > 0);
                     }
                 }
             }
@@ -1582,11 +1572,7 @@ mod tests {
 
         for result in results {
             let level = result["level"].as_str().unwrap();
-            assert!(
-                valid_levels.contains(&level),
-                "Invalid SARIF level: {}",
-                level
-            );
+            assert!(valid_levels.contains(&level));
         }
     }
 

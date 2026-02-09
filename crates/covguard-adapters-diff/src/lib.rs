@@ -621,6 +621,18 @@ Binary files a/assets/logo.png and b/assets/logo.png differ
     }
 
     #[test]
+    fn test_parse_patch_binary_files_marker_dev_null() {
+        let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222
+Binary files a/assets/logo.png and /dev/null differ
+"#;
+
+        let result = parse_patch_with_meta(diff).unwrap();
+        assert!(result.changed_ranges.is_empty());
+        assert!(result.binary_files.is_empty());
+    }
+
+    #[test]
     fn test_parse_patch_git_binary_patch_marker() {
         let diff = r#"diff --git a/assets/data.bin b/assets/data.bin
 index 1111111..2222222
@@ -635,6 +647,35 @@ HcmV?d00001
     }
 
     #[test]
+    fn test_parse_patch_malformed_hunk_header_returns_error() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+index 1111111..2222222 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,1 @@
++line
+"#;
+
+        let result = parse_patch(diff);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_patch_empty_line_in_hunk() {
+        let diff = "diff --git a/src/lib.rs b/src/lib.rs\n\
+index 1111111..2222222 100644\n\
+--- a/src/lib.rs\n\
++++ b/src/lib.rs\n\
+@@ -1,1 +1,3 @@\n\
++line1\n\
+\n\
++line2\n";
+
+        let ranges = parse_patch(diff).unwrap();
+        assert_eq!(ranges.get("src/lib.rs"), Some(&vec![1..=1, 3..=3]));
+    }
+
+    #[test]
     fn test_parse_hunk_header_with_counts() {
         let line = "@@ -10,5 +20,8 @@ fn context()";
         assert_eq!(parse_hunk_header(line), Some(20));
@@ -644,6 +685,12 @@ HcmV?d00001
     fn test_parse_hunk_header_without_counts() {
         let line = "@@ -1 +1 @@";
         assert_eq!(parse_hunk_header(line), Some(1));
+    }
+
+    #[test]
+    fn test_parse_hunk_header_missing_plus_returns_none() {
+        let line = "@@ -10,5 @@ fn context()";
+        assert_eq!(parse_hunk_header(line), None);
     }
 
     #[test]
