@@ -612,6 +612,12 @@ path_strip = ["/workspace/"]
             &["target/**".to_string()]
         ));
     }
+    #[test] fn test_matches_any_pattern_invalid_glob_returns_false() {
+        assert!(!matches_any_pattern(
+            "src/lib.rs",
+            &["[invalid".to_string()]
+        ));
+    }
     #[test] fn test_should_include_path() {
         let exclude = vec!["target/**".to_string(), "vendor/**".to_string()];
         let include = vec![];

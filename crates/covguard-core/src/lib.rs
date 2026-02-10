@@ -1224,6 +1224,8 @@ pub fn detect_ignored_lines<R: RepoReader>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
+    use covguard_domain::Metrics;
 
     /// A test clock that returns a fixed time.
     struct FixedClock {
@@ -1243,6 +1245,28 @@ mod tests {
     impl Clock for FixedClock {
         fn now(&self) -> chrono::DateTime<chrono::Utc> {
             self.time
+        }
+    }
+
+    struct MapReader {
+        lines: BTreeMap<(String, u32), String>,
+    }
+
+    impl MapReader {
+        fn new(entries: Vec<(&str, u32, &str)>) -> Self {
+            let mut lines = BTreeMap::new();
+            for (path, line_no, content) in entries {
+                lines.insert((path.to_string(), line_no), content.to_string());
+            }
+            Self { lines }
+        }
+    }
+
+    impl RepoReader for MapReader {
+        fn read_line(&self, path: &str, line_no: u32) -> Option<String> {
+            self.lines
+                .get(&(path.to_string(), line_no))
+                .cloned()
         }
     }
 
@@ -2111,10 +2135,7 @@ end_of_record
         let result = check_with_clock(request, &clock).unwrap();
 
         // Findings array should be empty
-        assert!(
-            result.report.findings.is_empty(),
-            "max_findings=0 should produce empty findings array"
-        );
+        assert!(result.report.findings.is_empty());
 
         // Truncation metadata should be present
         let truncation = result
@@ -2125,20 +2146,15 @@ end_of_record
             .expect("truncation metadata should be present");
         assert!(truncation.findings_truncated);
         assert_eq!(truncation.shown, 0);
-        assert!(
-            truncation.total > 0,
-            "total should reflect pre-truncation count"
-        );
+        assert!(truncation.total > 0, "total should reflect pre-truncation count");
 
         // Reasons should include "truncated"
-        assert!(
-            result
-                .report
-                .verdict
-                .reasons
-                .contains(&REASON_TRUNCATED.to_string()),
-            "reasons should include 'truncated'"
-        );
+        let has_trunc_reason = result
+            .report
+            .verdict
+            .reasons
+            .contains(&REASON_TRUNCATED.to_string());
+        assert!(has_trunc_reason, "reasons should include 'truncated'");
     }
 
     // ========================================================================
@@ -2317,5 +2333,453 @@ end_of_record
         assert_eq!(result.report.findings.len(), 4);
         // Markdown should mention all 3 uncovered lines
         assert!(result.markdown.contains("src/lib.rs"));
+    }
+
+    // ========================================================================
+    // Helper/Utility Tests
+    // ========================================================================
+
+    #[test]
+    fn test_build_debug_empty_returns_none() {
+        assert!(build_debug(&[]).is_none());
+    }
+
+    #[test]
+    fn test_build_debug_populated() {
+        let debug = build_debug(&vec!["assets/logo.png".to_string()]).expect("debug");
+        assert_eq!(debug["binary_files_count"], 1);
+        assert_eq!(debug["binary_files"][0], "assets/logo.png");
+    }
+
+    #[test]
+    fn test_is_invalid_diff_detection() {
+        assert!(!is_invalid_diff(""));
+        assert!(!is_invalid_diff("   \n\t"));
+        assert!(!is_invalid_diff("diff --git a/a.rs b/a.rs"));
+        assert!(!is_invalid_diff("@@ -1 +1 @@"));
+        assert!(!is_invalid_diff("+++ b/a.rs"));
+        assert!(!is_invalid_diff("--- a/a.rs"));
+        assert!(!is_invalid_diff("rename to a.rs"));
+        assert!(is_invalid_diff("just some random text"));
+    }
+
+    #[test]
+    fn test_build_reasons_pass_no_changes() {
+        let output = EvalOutput {
+            findings: vec![],
+            verdict: VerdictStatus::Pass,
+            metrics: Metrics {
+                changed_lines_total: 0,
+                ..Metrics::default()
+            },
+        };
+
+        let reasons = build_reasons(&output);
+        assert_eq!(reasons, vec![REASON_NO_CHANGED_LINES.to_string()]);
+    }
+
+    #[test]
+    fn test_build_reasons_pass_with_changes() {
+        let output = EvalOutput {
+            findings: vec![],
+            verdict: VerdictStatus::Pass,
+            metrics: Metrics {
+                changed_lines_total: 3,
+                ..Metrics::default()
+            },
+        };
+
+        let reasons = build_reasons(&output);
+        assert_eq!(reasons, vec![REASON_DIFF_COVERED.to_string()]);
+    }
+
+    #[test]
+    fn test_build_reasons_warn_with_uncovered_and_threshold() {
+        let finding = Finding {
+            severity: covguard_types::Severity::Error,
+            check_id: "diff.coverage_below_threshold".to_string(),
+            code: CODE_COVERAGE_BELOW_THRESHOLD.to_string(),
+            message: "below threshold".to_string(),
+            location: None,
+            data: None,
+            fingerprint: None,
+        };
+
+        let output = EvalOutput {
+            findings: vec![finding],
+            verdict: VerdictStatus::Warn,
+            metrics: Metrics {
+                changed_lines_total: 5,
+                uncovered_lines: 2,
+                ..Metrics::default()
+            },
+        };
+
+        let reasons = build_reasons(&output);
+        assert!(reasons.contains(&REASON_UNCOVERED_LINES.to_string()));
+        assert!(reasons.contains(&REASON_BELOW_THRESHOLD.to_string()));
+    }
+
+    #[test]
+    fn test_build_reasons_skip() {
+        let output = EvalOutput {
+            findings: vec![],
+            verdict: VerdictStatus::Skip,
+            metrics: Metrics::default(),
+        };
+
+        let reasons = build_reasons(&output);
+        assert_eq!(reasons, vec![REASON_SKIPPED.to_string()]);
+    }
+
+    #[test]
+    fn test_detect_ignored_lines_with_reader() {
+        let mut changed_ranges = BTreeMap::new();
+        changed_ranges.insert("src/lib.rs".to_string(), vec![1..=3]);
+        changed_ranges.insert("src/main.rs".to_string(), vec![10..=11]);
+
+        let reader = MapReader::new(vec![
+            ("src/lib.rs", 2, "let x = 1; // covguard: ignore"),
+            ("src/main.rs", 11, "# covguard: ignore"),
+        ]);
+
+        let ignored = detect_ignored_lines(&changed_ranges, &reader);
+        assert_eq!(
+            ignored.get("src/lib.rs").cloned(),
+            Some(BTreeSet::from([2]))
+        );
+        assert_eq!(
+            ignored.get("src/main.rs").cloned(),
+            Some(BTreeSet::from([11]))
+        );
+    }
+
+    #[test]
+    fn test_detect_ignored_lines_empty_when_no_directives() {
+        let mut changed_ranges = BTreeMap::new();
+        changed_ranges.insert("src/lib.rs".to_string(), vec![1..=2]);
+
+        let reader = MapReader::new(vec![("src/lib.rs", 1, "let x = 1;")]);
+        let ignored = detect_ignored_lines(&changed_ranges, &reader);
+        assert!(ignored.is_empty());
+    }
+
+    #[test]
+    fn test_fs_repo_reader_reads_relative_and_absolute() {
+        use std::fs;
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("covguard-core-reader-{unique}"));
+        let src_dir = root.join("src");
+        fs::create_dir_all(&src_dir).expect("create temp dir");
+
+        let file_path = src_dir.join("lib.rs");
+        fs::write(&file_path, "line1\nline2\nline3\n").expect("write file");
+
+        let reader = FsRepoReader::new(&root);
+        assert_eq!(
+            reader.read_line("src/lib.rs", 2),
+            Some("line2".to_string())
+        );
+        assert_eq!(reader.read_line("src/lib.rs", 0), None);
+        assert_eq!(reader.read_line("src/lib.rs", 99), None);
+
+        let abs_path = file_path.to_string_lossy().to_string();
+        assert_eq!(
+            reader.read_line(&abs_path, 1),
+            Some("line1".to_string())
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_app_error_from_diff_error() {
+        use covguard_adapters_diff::DiffError;
+
+        let err = DiffError::InvalidFormat("bad diff".to_string());
+        let app: AppError = err.into();
+        assert!(matches!(
+            app,
+            AppError::DiffParse(ref msg) if msg.contains("bad diff")
+        ));
+    }
+
+    #[test]
+    fn test_app_error_from_lcov_error() {
+        use covguard_adapters_coverage::LcovError;
+
+        let err = LcovError::InvalidFormat("bad lcov".to_string());
+        let app: AppError = err.into();
+        assert!(matches!(
+            app,
+            AppError::LcovParse(ref msg) if msg.contains("bad lcov")
+        ));
+    }
+
+    #[test]
+    fn test_error_bad_diff_parse_branch() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+index 1111111..2222222 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,1 @@
++line
+"#;
+
+        let lcov = "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n";
+        let request = CheckRequest {
+            diff_text: diff.to_string(),
+            lcov_texts: vec![lcov.to_string()],
+            ..Default::default()
+        };
+
+        let clock = FixedClock::new("2026-02-02T00:00:00Z");
+        let result = check_with_clock(request, &clock).unwrap();
+
+        assert!(
+            result
+                .report
+                .findings
+                .iter()
+                .any(|f| f.code == CODE_INVALID_DIFF)
+        );
+    }
+
+    #[test]
+    fn test_error_lcov_missing_sf_records() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/src/lib.rs
+@@ -0,0 +1,1 @@
++fn main() {}
+"#;
+
+        let lcov = "TN:\nDA:1,1\nend_of_record\n";
+        let request = CheckRequest {
+            diff_text: diff.to_string(),
+            lcov_texts: vec![lcov.to_string()],
+            ..Default::default()
+        };
+
+        let clock = FixedClock::new("2026-02-02T00:00:00Z");
+        let result = check_with_clock(request, &clock).unwrap();
+        assert!(
+            result
+                .report
+                .findings
+                .iter()
+                .any(|f| f.code == CODE_INVALID_LCOV)
+        );
+    }
+
+    #[test]
+    fn test_error_lcov_parse_failure_branch() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/src/lib.rs
+@@ -0,0 +1,1 @@
++fn main() {}
+"#;
+
+        let lcov = "TN:\nSF:src/lib.rs\nDA:abc,1\nend_of_record\n";
+        let request = CheckRequest {
+            diff_text: diff.to_string(),
+            lcov_texts: vec![lcov.to_string()],
+            ..Default::default()
+        };
+
+        let clock = FixedClock::new("2026-02-02T00:00:00Z");
+        let result = check_with_clock(request, &clock).unwrap();
+        assert!(
+            result
+                .report
+                .findings
+                .iter()
+                .any(|f| f.code == CODE_INVALID_LCOV)
+        );
+    }
+
+    #[test]
+    fn test_excluded_files_count_incremented() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/src/lib.rs
+@@ -0,0 +1,1 @@
++fn main() {}
+"#;
+        let lcov = "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n";
+        let request = CheckRequest {
+            diff_text: diff.to_string(),
+            lcov_texts: vec![lcov.to_string()],
+            exclude_patterns: vec!["src/**".to_string()],
+            ..Default::default()
+        };
+
+        let clock = FixedClock::new("2026-02-02T00:00:00Z");
+        let result = check_with_clock(request, &clock).unwrap();
+
+        assert_eq!(result.report.data.excluded_files_count, 1);
+    }
+
+    #[test]
+    fn test_truncate_findings_no_truncation_when_under_limit() {
+        let findings = vec![Finding::uncovered_line("src/lib.rs", 1, 0)];
+        let (truncated, trunc) = truncate_findings(findings.clone(), Some(5));
+        assert_eq!(truncated.len(), findings.len());
+        assert!(trunc.is_none());
+    }
+
+    #[test]
+    fn test_build_error_report_pair_with_capabilities() {
+        let request = CheckRequest {
+            base_ref: Some("main".to_string()),
+            head_ref: Some("feature".to_string()),
+            sensor_schema: true,
+            scope: Scope::Touched,
+            ..Default::default()
+        };
+        let now = chrono::Utc::now();
+        let (domain, receipt) = build_error_report_pair(
+            &request,
+            now,
+            now,
+            CODE_INVALID_DIFF,
+            "bad diff",
+            true,
+            false,
+        );
+
+        assert_eq!(domain.data.inputs.diff_source, "git-refs");
+        let receipt = receipt.expect("receipt should exist");
+        let capabilities = receipt.run.capabilities.expect("capabilities");
+        assert_eq!(capabilities.inputs.diff.status, InputStatus::Available);
+        assert_eq!(capabilities.inputs.coverage.status, InputStatus::Unavailable);
+    }
+
+    #[test]
+    fn test_build_error_report_pair_diff_missing() {
+        let request = CheckRequest {
+            sensor_schema: true,
+            scope: Scope::Added,
+            ..Default::default()
+        };
+        let now = chrono::Utc::now();
+        let (_domain, receipt) = build_error_report_pair(
+            &request,
+            now,
+            now,
+            CODE_INVALID_DIFF,
+            "bad diff",
+            false,
+            true,
+        );
+
+        let receipt = receipt.expect("receipt should exist");
+        let capabilities = receipt.run.capabilities.expect("capabilities");
+        assert_eq!(capabilities.inputs.diff.status, InputStatus::Unavailable);
+        assert_eq!(capabilities.inputs.coverage.status, InputStatus::Available);
+    }
+
+    #[test]
+    fn test_build_error_report_pair_without_capabilities() {
+        let request = CheckRequest {
+            sensor_schema: false,
+            ..Default::default()
+        };
+        let now = chrono::Utc::now();
+        let (_domain, receipt) = build_error_report_pair(
+            &request,
+            now,
+            now,
+            CODE_INVALID_DIFF,
+            "bad diff",
+            true,
+            true,
+        );
+        assert!(receipt.is_none());
+    }
+
+    #[test]
+    fn test_build_skip_report_pair_sensor_schema_false_stdin() {
+        let request = CheckRequest {
+            sensor_schema: false,
+            scope: Scope::Touched,
+            ..Default::default()
+        };
+        let now = chrono::Utc::now();
+        let (domain, receipt) = build_skip_report_pair(
+            &request,
+            now,
+            now,
+            false,
+            true,
+            REASON_MISSING_LCOV,
+        );
+        assert_eq!(domain.data.inputs.diff_source, "stdin");
+        assert_eq!(domain.data.scope, "touched");
+        assert!(receipt.is_none());
+    }
+
+    #[test]
+    fn test_build_skip_report_pair_diff_present_cov_missing() {
+        let request = CheckRequest {
+            base_ref: Some("main".to_string()),
+            head_ref: Some("feature".to_string()),
+            sensor_schema: true,
+            ..Default::default()
+        };
+        let now = chrono::Utc::now();
+        let (_domain, receipt) = build_skip_report_pair(
+            &request,
+            now,
+            now,
+            true,
+            false,
+            REASON_MISSING_LCOV,
+        );
+        let receipt = receipt.expect("receipt should exist");
+        let capabilities = receipt.run.capabilities.expect("capabilities");
+        assert_eq!(capabilities.inputs.diff.status, InputStatus::Available);
+        assert_eq!(capabilities.inputs.coverage.status, InputStatus::Unavailable);
+    }
+
+    #[test]
+    fn test_build_skip_report_pair_diff_missing_cov_present() {
+        let request = CheckRequest {
+            sensor_schema: true,
+            ..Default::default()
+        };
+        let now = chrono::Utc::now();
+        let (_domain, receipt) = build_skip_report_pair(
+            &request,
+            now,
+            now,
+            false,
+            true,
+            REASON_MISSING_LCOV,
+        );
+        let receipt = receipt.expect("receipt should exist");
+        let capabilities = receipt.run.capabilities.expect("capabilities");
+        assert_eq!(capabilities.inputs.diff.status, InputStatus::Unavailable);
+        assert_eq!(capabilities.inputs.coverage.status, InputStatus::Available);
+    }
+
+    #[test]
+    fn test_render_wrappers_with_limits() {
+        let report = Report::default();
+        let md = render_markdown_with_limit(&report, 1);
+        let annotations = render_annotations_with_limit(&report, 1);
+        let sarif = render_sarif_with_limit(&report, 1);
+
+        assert!(!md.is_empty());
+        assert!(annotations.is_empty());
+        assert!(sarif.contains("\"version\""));
     }
 }

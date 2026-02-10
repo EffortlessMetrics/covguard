@@ -316,10 +316,8 @@ pub fn parse_patch_with_meta(text: &str) -> Result<DiffParseResult, DiffError> {
     // Convert line lists to merged ranges
     let mut ranges: ChangedRanges = BTreeMap::new();
     for (file, lines) in result {
-        if !lines.is_empty() {
-            let line_ranges: Vec<RangeInclusive<u32>> = lines.into_iter().map(|l| l..=l).collect();
-            ranges.insert(file, merge_ranges(line_ranges));
-        }
+        let line_ranges: Vec<RangeInclusive<u32>> = lines.into_iter().map(|l| l..=l).collect();
+        ranges.insert(file, merge_ranges(line_ranges));
     }
     // Remove any binary files from the ranges
     for binary in &binary_files {
@@ -625,6 +623,18 @@ Binary files a/assets/logo.png and b/assets/logo.png differ
         let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
 index 1111111..2222222
 Binary files a/assets/logo.png and /dev/null differ
+"#;
+
+        let result = parse_patch_with_meta(diff).unwrap();
+        assert!(result.changed_ranges.is_empty());
+        assert!(result.binary_files.is_empty());
+    }
+
+    #[test]
+    fn test_parse_patch_binary_files_marker_without_and() {
+        let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222
+Binary files a/assets/logo.png differ
 "#;
 
         let result = parse_patch_with_meta(diff).unwrap();
