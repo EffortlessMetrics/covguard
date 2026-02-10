@@ -1,0 +1,4 @@
+repository:
+  description: "Diff-scoped coverage gate for CI/CD that answers whether changed lines are covered by tests."
+  homepage: "https://github.com/effortlessmetrics/cov-guard"
+  topics: rust, devex, receipts, coverage, diff, ci
