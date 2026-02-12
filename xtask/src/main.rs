@@ -22,21 +22,11 @@ use covguard_types::{
 };
 
 /// Exit code for validation failures (matches covguard convention)
-#[cfg(not(test))]
-const EXIT_VALIDATION_FAILURE: i32 = 2;
-
 #[cfg(test)]
 static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 fn exit_validation_failure() -> Result<()> {
-    #[cfg(test)]
-    {
-        bail!("validation failure");
-    }
-    #[cfg(not(test))]
-    {
-        std::process::exit(EXIT_VALIDATION_FAILURE);
-    }
+    bail!("validation failure")
 }
 
 /// Development tasks for covguard
@@ -106,17 +96,24 @@ enum Commands {
     },
 }
 
-#[cfg(not(test))]
-fn main() {
-    let cli = Cli::parse();
-    if let Err(e) = run_cli(cli) {
-        eprintln!("error: {e:#}");
-        std::process::exit(1);
-    }
+fn main() -> std::process::ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+    let code = main_impl(args);
+    std::process::ExitCode::from(u8::try_from(code).unwrap_or(1))
 }
 
-#[cfg(test)]
-fn main() {}
+fn main_impl(args: Vec<String>) -> i32 {
+    match run_cli_with_args(args) {
+        Ok(_) => 0,
+        Err(e) => {
+            if e.to_string().contains("validation failure") {
+                return 2;
+            }
+            eprintln!("error: {e:#}");
+            1
+        }
+    }
+}
 
 fn run_cli_with_args(args: Vec<String>) -> Result<()> {
     let cli = Cli::try_parse_from(&args)?;
@@ -263,7 +260,7 @@ fn validate_refs(value: &serde_json::Value, schemas_dir: &Path) -> Result<()> {
                     if !ref_path.exists() {
                         bail!("$ref points to non-existent file: {}", ref_str);
                     }
-                    let _ = ref_path; }
+                }
             }
             for v in obj.values() {
                 validate_refs(v, schemas_dir)?;
@@ -1486,11 +1483,6 @@ mod tests {
         let contracts_dir = root.join("contracts").join("fixtures");
         fs::create_dir_all(&contracts_dir).expect("create contracts fixtures dir");
         fs::write(contracts_dir.join(name), content).expect("write contract fixture");
-    }
-
-    #[test]
-    fn test_main_noop() {
-        super::main();
     }
 
     #[test]

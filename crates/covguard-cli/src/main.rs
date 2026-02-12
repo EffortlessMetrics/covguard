@@ -222,14 +222,10 @@ fn extract_out_from_args(args: &[String]) -> String {
     "artifacts/covguard/report.json".to_string()
 }
 
-#[cfg(not(test))]
 fn main() -> std::process::ExitCode {
     let exit_code = run_cli_with_args(std::env::args().collect());
     std::process::ExitCode::from(u8::try_from(exit_code).unwrap_or(1))
 }
-
-#[cfg(test)]
-fn main() {}
 
 fn clap_exit(err: clap::Error) -> i32 {
     let _ = err.print();
@@ -660,11 +656,21 @@ fn map_missing_behavior(behavior: covguard_config::MissingBehavior) -> MissingBe
     }
 }
 
+#[cfg(test)]
+fn get_git_command() -> String {
+    std::env::var("COVGUARD_GIT").unwrap_or_else(|_| "git".to_string())
+}
+
+#[cfg(not(test))]
+fn get_git_command() -> String {
+    "git".to_string()
+}
+
 fn resolve_repo_root(root: Option<String>) -> PathBuf {
     if let Some(path) = root {
         return PathBuf::from(path);
     }
-    let git_cmd = std::env::var("COVGUARD_GIT").unwrap_or_else(|_| "git".to_string());
+    let git_cmd = get_git_command();
     if let Ok(output) = std::process::Command::new(git_cmd)
         .args(["rev-parse", "--show-toplevel"])
         .output()
@@ -1432,11 +1438,6 @@ mod tests {
         assert_eq!(code, EXIT_CODE_ERROR);
 
         let _ = fs::remove_dir_all(&temp);
-    }
-
-    #[test]
-    fn test_main_noop_for_tests() {
-        super::main();
     }
 
     #[test]
