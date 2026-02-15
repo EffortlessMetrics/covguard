@@ -21,7 +21,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true }
-jsonschema = "0.41.0"
+jsonschema = "0.42.0"
 cucumber = { workspace = true }
 futures = { workspace = true }
 
