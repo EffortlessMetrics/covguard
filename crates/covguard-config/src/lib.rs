@@ -435,10 +435,12 @@ pub fn should_include_path(
 mod tests {
     use super::*;
 
-    #[test] fn test_default_true_returns_true() {
+    #[test]
+    fn test_default_true_returns_true() {
         assert!(default_true());
     }
-    #[test] fn test_effective_config_default_values() {
+    #[test]
+    fn test_effective_config_default_values() {
         let defaults = EffectiveConfig::default();
         assert_eq!(defaults.scope, Scope::Added);
         assert_eq!(defaults.fail_on, FailOn::Error);
@@ -451,12 +453,14 @@ mod tests {
         assert!(defaults.ignore_directives);
         assert!(defaults.path_strip.is_empty());
     }
-    #[test] fn test_parse_minimal_config() {
+    #[test]
+    fn test_parse_minimal_config() {
         let config = parse_config("").unwrap();
         assert!(config.profile.is_none());
         assert!(config.scope.is_none());
     }
-    #[test] fn test_parse_full_config() {
+    #[test]
+    fn test_parse_full_config() {
         let toml = r#"
 profile = "strict"
 scope = "touched"
@@ -490,12 +494,14 @@ path_strip = ["/home/runner/"]
         assert!(!config.ignore_config.directives);
         assert_eq!(config.normalize.path_strip, vec!["/home/runner/"]);
     }
-    #[test] fn test_invalid_threshold() {
+    #[test]
+    fn test_invalid_threshold() {
         let toml = "min_diff_coverage_pct = 150";
         let result = parse_config(toml);
         assert!(result.is_err());
     }
-    #[test] fn test_profile_defaults_oss() {
+    #[test]
+    fn test_profile_defaults_oss() {
         let defaults = profile_defaults(Profile::Oss);
         assert_eq!(defaults.fail_on, FailOn::Never);
         assert_eq!(defaults.threshold_pct, 70.0);
@@ -503,7 +509,8 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Skip);
         assert_eq!(defaults.scope, Scope::Added);
     }
-    #[test] fn test_profile_defaults_moderate() {
+    #[test]
+    fn test_profile_defaults_moderate() {
         let defaults = profile_defaults(Profile::Moderate);
         assert_eq!(defaults.fail_on, FailOn::Error);
         assert_eq!(defaults.threshold_pct, 75.0);
@@ -511,7 +518,8 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Skip);
         assert_eq!(defaults.scope, Scope::Added);
     }
-    #[test] fn test_profile_defaults_team() {
+    #[test]
+    fn test_profile_defaults_team() {
         let defaults = profile_defaults(Profile::Team);
         assert_eq!(defaults.fail_on, FailOn::Error);
         assert_eq!(defaults.threshold_pct, 80.0);
@@ -519,7 +527,8 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Warn);
         assert_eq!(defaults.scope, Scope::Added);
     }
-    #[test] fn test_profile_defaults_strict() {
+    #[test]
+    fn test_profile_defaults_strict() {
         let defaults = profile_defaults(Profile::Strict);
         assert_eq!(defaults.fail_on, FailOn::Error);
         assert_eq!(defaults.threshold_pct, 90.0);
@@ -528,7 +537,8 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Fail);
         assert_eq!(defaults.scope, Scope::Touched);
     }
-    #[test] fn test_resolve_config_cli_overrides() {
+    #[test]
+    fn test_resolve_config_cli_overrides() {
         let config = parse_config("min_diff_coverage_pct = 70").unwrap();
         let cli = CliOverrides {
             threshold_pct: Some(85.0),
@@ -538,7 +548,8 @@ path_strip = ["/home/runner/"]
 
         assert_eq!(effective.threshold_pct, 85.0);
     }
-    #[test] fn test_resolve_config_applies_config_fields() {
+    #[test]
+    fn test_resolve_config_applies_config_fields() {
         let toml = r#"
 profile = "moderate"
 scope = "touched"
@@ -572,7 +583,8 @@ path_strip = ["/workspace/"]
         assert!(!effective.ignore_directives);
         assert_eq!(effective.path_strip, vec!["/workspace/"]);
     }
-    #[test] fn test_resolve_config_cli_overrides_all_fields() {
+    #[test]
+    fn test_resolve_config_cli_overrides_all_fields() {
         let config = parse_config("min_diff_coverage_pct = 70").unwrap();
         let cli = CliOverrides {
             scope: Some(Scope::Touched),
@@ -590,7 +602,8 @@ path_strip = ["/workspace/"]
         assert!(!effective.ignore_directives);
         assert_eq!(effective.path_strip, vec!["/tmp/"]);
     }
-    #[test] fn test_resolve_config_no_config() {
+    #[test]
+    fn test_resolve_config_no_config() {
         let cli = CliOverrides::default();
         let effective = resolve_config(None, &cli);
 
@@ -598,7 +611,8 @@ path_strip = ["/workspace/"]
         assert_eq!(effective.threshold_pct, 80.0);
         assert_eq!(effective.fail_on, FailOn::Error);
     }
-    #[test] fn test_matches_any_pattern() {
+    #[test]
+    fn test_matches_any_pattern() {
         assert!(matches_any_pattern(
             "target/debug/foo",
             &["target/**".to_string()]
@@ -612,13 +626,15 @@ path_strip = ["/workspace/"]
             &["target/**".to_string()]
         ));
     }
-    #[test] fn test_matches_any_pattern_invalid_glob_returns_false() {
+    #[test]
+    fn test_matches_any_pattern_invalid_glob_returns_false() {
         assert!(!matches_any_pattern(
             "src/lib.rs",
             &["[invalid".to_string()]
         ));
     }
-    #[test] fn test_should_include_path() {
+    #[test]
+    fn test_should_include_path() {
         let exclude = vec!["target/**".to_string(), "vendor/**".to_string()];
         let include = vec![];
 
@@ -626,14 +642,16 @@ path_strip = ["/workspace/"]
         assert!(!should_include_path("target/debug/foo", &include, &exclude));
         assert!(!should_include_path("vendor/lib.rs", &include, &exclude));
     }
-    #[test] fn test_should_include_path_with_allowlist() {
+    #[test]
+    fn test_should_include_path_with_allowlist() {
         let exclude = vec![];
         let include = vec!["src/**".to_string()];
 
         assert!(should_include_path("src/lib.rs", &include, &exclude));
         assert!(!should_include_path("tests/test.rs", &include, &exclude));
     }
-    #[test] fn test_load_and_discover_config() {
+    #[test]
+    fn test_load_and_discover_config() {
         use std::fs;
 
         let unique = std::time::SystemTime::now()

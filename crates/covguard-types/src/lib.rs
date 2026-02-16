@@ -1211,17 +1211,11 @@ mod tests {
         codes.extend(scan_dir(&root, "fixtures/expected"));
         codes.extend(scan_dir(&root, "crates/covguard-render/src/snapshots"));
         codes.extend(scan_dir(&root, "crates/covguard-app/src/snapshots"));
-        let temp_root = std::env::temp_dir().join(format!(
-            "covguard-types-{}",
-            std::process::id()
-        ));
+        let temp_root = std::env::temp_dir().join(format!("covguard-types-{}", std::process::id()));
         let nested_dir = temp_root.join("nested").join("inner");
         fs::create_dir_all(&nested_dir).expect("create temp nested dir");
-        fs::write(
-            nested_dir.join("codes.txt"),
-            "covguard.diff.uncovered_line",
-        )
-        .expect("write temp codes file");
+        fs::write(nested_dir.join("codes.txt"), "covguard.diff.uncovered_line")
+            .expect("write temp codes file");
         codes.extend(scan_dir(&temp_root, "nested"));
         let _ = fs::remove_dir_all(&temp_root);
 

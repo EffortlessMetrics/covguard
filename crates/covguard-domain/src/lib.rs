@@ -499,12 +499,14 @@ mod tests {
         input
     }
 
-    #[test] fn test_scope_as_str() {
+    #[test]
+    fn test_scope_as_str() {
         assert_eq!(Scope::Added.as_str(), "added");
         assert_eq!(Scope::Touched.as_str(), "touched");
     }
 
-    #[test] fn test_all_lines_covered_pass() {
+    #[test]
+    fn test_all_lines_covered_pass() {
         let input = make_input(
             vec![("src/lib.rs", vec![1..=3])],
             vec![("src/lib.rs", vec![(1, 1), (2, 2), (3, 1)])],
@@ -526,7 +528,8 @@ mod tests {
         assert_eq!(output.metrics.diff_coverage_pct, 100.0);
     }
 
-    #[test] fn test_all_lines_uncovered_fail() {
+    #[test]
+    fn test_all_lines_uncovered_fail() {
         let input = make_input(
             vec![("src/lib.rs", vec![1..=3])],
             vec![("src/lib.rs", vec![(1, 0), (2, 0), (3, 0)])],
@@ -547,7 +550,8 @@ mod tests {
         assert_eq!(output.metrics.diff_coverage_pct, 0.0);
     }
 
-    #[test] fn test_mixed_coverage() {
+    #[test]
+    fn test_mixed_coverage() {
         let input = make_input(
             vec![("src/lib.rs", vec![1..=4])],
             vec![("src/lib.rs", vec![(1, 1), (2, 0), (3, 1), (4, 0)])],
@@ -569,7 +573,8 @@ mod tests {
         assert_eq!(uncovered_findings.len(), 2);
     }
 
-    #[test] fn test_empty_diff_pass() {
+    #[test]
+    fn test_empty_diff_pass() {
         let input = make_input(vec![], vec![("src/lib.rs", vec![(1, 0)])]);
 
         let output = evaluate(input);
@@ -580,7 +585,8 @@ mod tests {
         assert_eq!(output.metrics.diff_coverage_pct, 100.0);
     }
 
-    #[test] fn test_missing_coverage_data() {
+    #[test]
+    fn test_missing_coverage_data() {
         // Changed lines with no coverage data for file
         let input = make_input(vec![("src/new.rs", vec![1..=2])], vec![]);
 
@@ -600,7 +606,8 @@ mod tests {
         );
     }
 
-    #[test] fn test_missing_line_within_file_counts_as_missing() {
+    #[test]
+    fn test_missing_line_within_file_counts_as_missing() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=2])],
             vec![("src/lib.rs", vec![(1, 1)])],
@@ -615,7 +622,8 @@ mod tests {
         assert_eq!(output.metrics.diff_coverage_pct, 50.0);
     }
 
-    #[test] fn test_missing_file_fail_severity_error() {
+    #[test]
+    fn test_missing_file_fail_severity_error() {
         let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
         input.policy.missing_file = MissingBehavior::Fail;
 
@@ -629,7 +637,8 @@ mod tests {
         assert_eq!(missing.severity, Severity::Error);
     }
 
-    #[test] fn test_missing_coverage_skip_excludes_from_percentage() {
+    #[test]
+    fn test_missing_coverage_skip_excludes_from_percentage() {
         let mut input = make_input(vec![("src/new.rs", vec![1..=2])], vec![]);
         input.policy.missing_file = MissingBehavior::Skip;
         input.policy.missing_coverage = MissingBehavior::Skip;
@@ -642,7 +651,8 @@ mod tests {
         assert_eq!(output.metrics.diff_coverage_pct, 100.0);
     }
 
-    #[test] fn test_max_uncovered_lines_tolerance_marks_info() {
+    #[test]
+    fn test_max_uncovered_lines_tolerance_marks_info() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=2])],
             vec![("src/lib.rs", vec![(1, 0), (2, 0)])],
@@ -661,7 +671,8 @@ mod tests {
         );
     }
 
-    #[test] fn test_below_threshold_finding() {
+    #[test]
+    fn test_below_threshold_finding() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=10])],
             vec![(
@@ -694,7 +705,8 @@ mod tests {
         );
     }
 
-    #[test] fn test_above_threshold_pass() {
+    #[test]
+    fn test_above_threshold_pass() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=10])],
             vec![(
@@ -723,7 +735,8 @@ mod tests {
         assert_eq!(output.verdict, VerdictStatus::Fail);
     }
 
-    #[test] fn test_deterministic_ordering() {
+    #[test]
+    fn test_deterministic_ordering() {
         let input = make_input(
             vec![("src/z.rs", vec![1..=1]), ("src/a.rs", vec![2..=2, 1..=1])],
             vec![
@@ -758,7 +771,8 @@ mod tests {
         );
     }
 
-    #[test] fn test_sort_findings_tiebreakers() {
+    #[test]
+    fn test_sort_findings_tiebreakers() {
         fn make_finding(
             path: &str,
             line: u32,
@@ -810,7 +824,8 @@ mod tests {
         assert_eq!(by_message[0].message, "a");
     }
 
-    #[test] fn test_fail_on_never() {
+    #[test]
+    fn test_fail_on_never() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=1])],
             vec![("src/lib.rs", vec![(1, 0)])],
@@ -823,7 +838,8 @@ mod tests {
         assert_eq!(output.verdict, VerdictStatus::Warn);
     }
 
-    #[test] fn test_fail_on_never_passes_without_findings() {
+    #[test]
+    fn test_fail_on_never_passes_without_findings() {
         let mut input = make_input(vec![], vec![]);
         input.policy.fail_on = FailOn::Never;
 
@@ -832,7 +848,8 @@ mod tests {
         assert_eq!(output.verdict, VerdictStatus::Pass);
     }
 
-    #[test] fn test_fail_on_warn_fails_on_warnings() {
+    #[test]
+    fn test_fail_on_warn_fails_on_warnings() {
         let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
         input.policy.fail_on = FailOn::Warn;
         input.policy.missing_file = MissingBehavior::Warn;
@@ -842,7 +859,8 @@ mod tests {
         assert_eq!(output.verdict, VerdictStatus::Fail);
     }
 
-    #[test] fn test_fail_on_error_warns_on_only_warnings() {
+    #[test]
+    fn test_fail_on_error_warns_on_only_warnings() {
         let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
         input.policy.fail_on = FailOn::Error;
         input.policy.missing_file = MissingBehavior::Warn;
@@ -853,7 +871,8 @@ mod tests {
         assert_eq!(output.verdict, VerdictStatus::Warn);
     }
 
-    #[test] fn test_fail_on_warn() {
+    #[test]
+    fn test_fail_on_warn() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=1])],
             vec![("src/lib.rs", vec![(1, 1)])],
@@ -867,29 +886,35 @@ mod tests {
         assert_eq!(output.verdict, VerdictStatus::Pass);
     }
 
-    #[test] fn test_calc_coverage_pct_zero_total() {
+    #[test]
+    fn test_calc_coverage_pct_zero_total() {
         assert_eq!(calc_coverage_pct(0, 0, 0), 100.0);
     }
 
-    #[test] fn test_calc_coverage_pct_all_covered() {
+    #[test]
+    fn test_calc_coverage_pct_all_covered() {
         assert_eq!(calc_coverage_pct(10, 0, 0), 100.0);
     }
 
-    #[test] fn test_calc_coverage_pct_none_covered() {
+    #[test]
+    fn test_calc_coverage_pct_none_covered() {
         assert_eq!(calc_coverage_pct(0, 10, 0), 0.0);
     }
 
-    #[test] fn test_calc_coverage_pct_half_covered() {
+    #[test]
+    fn test_calc_coverage_pct_half_covered() {
         assert_eq!(calc_coverage_pct(5, 5, 0), 50.0);
     }
 
-    #[test] fn test_calc_coverage_pct_with_missing() {
+    #[test]
+    fn test_calc_coverage_pct_with_missing() {
         // 5 covered, 3 uncovered, 2 missing = 10 total
         // 5/10 = 50%
         assert_eq!(calc_coverage_pct(5, 3, 2), 50.0);
     }
 
-    #[test] fn test_multiple_files() {
+    #[test]
+    fn test_multiple_files() {
         let input = make_input(
             vec![("src/a.rs", vec![1..=2]), ("src/b.rs", vec![1..=2])],
             vec![
@@ -905,7 +930,8 @@ mod tests {
         assert_eq!(output.metrics.diff_coverage_pct, 50.0);
     }
 
-    #[test] fn test_non_contiguous_ranges() {
+    #[test]
+    fn test_non_contiguous_ranges() {
         let input = make_input(
             vec![("src/lib.rs", vec![1..=2, 10..=12])],
             vec![(
@@ -925,7 +951,8 @@ mod tests {
     // Ignore Directive Tests
     // ========================================================================
 
-    #[test] fn test_has_ignore_directive_rust_comment() {
+    #[test]
+    fn test_has_ignore_directive_rust_comment() {
         assert!(has_ignore_directive("let x = 1; // covguard: ignore"));
         assert!(has_ignore_directive("// covguard: ignore"));
         assert!(has_ignore_directive("    // covguard: ignore"));
@@ -933,37 +960,43 @@ mod tests {
         assert!(has_ignore_directive("// covguard:ignore")); // no space after colon
     }
 
-    #[test] fn test_has_ignore_directive_python_comment() {
+    #[test]
+    fn test_has_ignore_directive_python_comment() {
         assert!(has_ignore_directive("x = 1  # covguard: ignore"));
         assert!(has_ignore_directive("# covguard: ignore"));
         assert!(has_ignore_directive("#covguard:ignore"));
     }
 
-    #[test] fn test_has_ignore_directive_block_comment() {
+    #[test]
+    fn test_has_ignore_directive_block_comment() {
         assert!(has_ignore_directive("/* covguard: ignore */"));
         assert!(has_ignore_directive("int x = 1; /* covguard: ignore */"));
     }
 
-    #[test] fn test_has_ignore_directive_sql_comment() {
+    #[test]
+    fn test_has_ignore_directive_sql_comment() {
         assert!(has_ignore_directive("-- covguard: ignore"));
         assert!(has_ignore_directive("SELECT 1; -- covguard: ignore"));
     }
 
-    #[test] fn test_has_ignore_directive_hyphen_syntax() {
+    #[test]
+    fn test_has_ignore_directive_hyphen_syntax() {
         assert!(has_ignore_directive("// covguard-ignore"));
         assert!(has_ignore_directive("# covguard-ignore"));
         assert!(has_ignore_directive("-- covguard-ignore"));
         assert!(has_ignore_directive("/* covguard-ignore */"));
     }
 
-    #[test] fn test_has_ignore_directive_negative_cases() {
+    #[test]
+    fn test_has_ignore_directive_negative_cases() {
         assert!(!has_ignore_directive("let x = 1;"));
         assert!(!has_ignore_directive("// some other comment"));
         assert!(!has_ignore_directive("// covguard")); // missing ignore
         assert!(!has_ignore_directive("// ignore covguard")); // wrong order
     }
 
-    #[test] fn test_ignored_lines_skipped() {
+    #[test]
+    fn test_ignored_lines_skipped() {
         let input = make_input_with_ignored(
             vec![("src/lib.rs", vec![1..=3])],
             vec![("src/lib.rs", vec![(1, 0), (2, 0), (3, 0)])],
@@ -978,7 +1011,8 @@ mod tests {
         assert_eq!(output.metrics.changed_lines_total, 2); // Only non-ignored lines counted
     }
 
-    #[test] fn test_ignored_lines_all_ignored() {
+    #[test]
+    fn test_ignored_lines_all_ignored() {
         let input = make_input_with_ignored(
             vec![("src/lib.rs", vec![1..=3])],
             vec![("src/lib.rs", vec![(1, 0), (2, 0), (3, 0)])],
@@ -995,7 +1029,8 @@ mod tests {
         assert!(output.findings.is_empty());
     }
 
-    #[test] fn test_ignored_lines_disabled_in_policy() {
+    #[test]
+    fn test_ignored_lines_disabled_in_policy() {
         let mut input = make_input_with_ignored(
             vec![("src/lib.rs", vec![1..=3])],
             vec![("src/lib.rs", vec![(1, 0), (2, 0), (3, 0)])],
@@ -1010,7 +1045,8 @@ mod tests {
         assert_eq!(output.metrics.ignored_lines, 0);
     }
 
-    #[test] fn test_ignored_lines_pass_when_uncovered_ignored() {
+    #[test]
+    fn test_ignored_lines_pass_when_uncovered_ignored() {
         // 2 covered lines, 1 uncovered but ignored line
         let input = make_input_with_ignored(
             vec![("src/lib.rs", vec![1..=3])],

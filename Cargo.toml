@@ -21,6 +21,7 @@ edition = "2024"
 license = "Apache-2.0 or MIT"
 repository = "https://github.com/effortlessmetrics/cov-guard"
 homepage = "https://github.com/effortlessmetrics/cov-guard"
+readme = "README.md"
 keywords = ["coverage", "diff", "testing", "ci", "code-coverage"]
 categories = ["development-tools::testing", "command-line-utilities"]
 rust-version = "1.92"

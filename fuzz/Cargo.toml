@@ -1,6 +1,14 @@
 [package]
 name = "covguard-fuzz"
+description = "Fuzz targets for covguard diff and LCOV parsers"
 version = "0.0.0"
+license = "Apache-2.0 or MIT"
+repository = "https://github.com/effortlessmetrics/cov-guard"
+homepage = "https://github.com/effortlessmetrics/cov-guard"
+keywords = ["coverage", "diff", "testing", "ci", "code-coverage"]
+categories = ["development-tools::testing", "command-line-utilities"]
+readme = "../README.md"
+rust-version = "1.92"
 publish = false
 edition = "2024"
 

@@ -132,6 +132,6 @@ jobs:
           sleep 30
           cargo publish --package covguard-config --allow-dirty || true
           sleep 30
-          cargo publish --package covguard-app --allow-dirty || true
+          cargo publish --package covguard-core --allow-dirty || true
           sleep 30
           cargo publish --package covguard --allow-dirty || true

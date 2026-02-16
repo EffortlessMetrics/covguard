@@ -10,18 +10,18 @@ use covguard_core::{
     AppError, CheckRequest, FailOn, FsRepoReader, MissingBehavior, SystemClock,
     check_with_clock_and_reader,
 };
+#[cfg(test)]
+use covguard_types::CODE_UNCOVERED_LINE;
 use covguard_types::{
     CHECK_ID_RUNTIME, CODE_RUNTIME_ERROR, Capabilities, Finding, InputCapability, InputStatus,
     Inputs, InputsCapability, REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Report,
     ReportData, Run, SENSOR_SCHEMA_ID, Scope, Tool, Verdict, VerdictCounts, VerdictStatus,
     compute_fingerprint, explain,
 };
-#[cfg(test)]
-use covguard_types::CODE_UNCOVERED_LINE;
 use std::fs;
-use std::io::{self, Read};
 #[cfg(not(test))]
 use std::io::IsTerminal;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -689,7 +689,7 @@ fn read_stdin_diff(explicit: bool) -> Result<Option<String>, CliError> {
     #[cfg(test)]
     {
         let mut cursor = io::Cursor::new("");
-        return read_diff_from_reader(&mut cursor, true, explicit);
+        read_diff_from_reader(&mut cursor, true, explicit)
     }
     #[cfg(not(test))]
     {
@@ -1176,7 +1176,10 @@ mod tests {
         ]);
         assert!(matches!(
             cli.command,
-            Commands::Check { mode: CliMode::Standard, .. }
+            Commands::Check {
+                mode: CliMode::Standard,
+                ..
+            }
         ));
     }
 
@@ -1304,7 +1307,7 @@ mod tests {
         struct FailingReader;
         impl Read for FailingReader {
             fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-                Err(io::Error::new(io::ErrorKind::Other, "boom"))
+                Err(std::io::Error::other("boom"))
             }
         }
 
@@ -1352,10 +1355,12 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&content).expect("parse json");
         assert_eq!(value["schema"], SENSOR_SCHEMA_ID);
         assert_eq!(value["verdict"]["status"], "fail");
-        assert!(value["findings"][0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("boom"));
+        assert!(
+            value["findings"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("boom")
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1647,11 +1652,7 @@ new file mode 100644
 +fn main() {}
 "#;
         let lcov_path = temp.join("coverage.info");
-        fs::write(
-            &lcov_path,
-            "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n",
-        )
-        .expect("write lcov");
+        fs::write(&lcov_path, "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n").expect("write lcov");
 
         let code = run_check_with_stdin(
             CliMode::Standard,
@@ -1705,7 +1706,15 @@ new file mode 100644
             .expect("git add");
         Command::new("git")
             .current_dir(&repo)
-            .args(["-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-m", "init"])
+            .args([
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=test",
+                "commit",
+                "-m",
+                "init",
+            ])
             .output()
             .expect("git commit");
 
@@ -1717,7 +1726,15 @@ new file mode 100644
             .expect("git add");
         Command::new("git")
             .current_dir(&repo)
-            .args(["-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-m", "update"])
+            .args([
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=test",
+                "commit",
+                "-m",
+                "update",
+            ])
             .output()
             .expect("git commit");
 
@@ -1743,11 +1760,7 @@ new file mode 100644
         .to_string();
 
         let lcov_path = repo.join("coverage.info");
-        fs::write(
-            &lcov_path,
-            "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n",
-        )
-        .expect("write lcov");
+        fs::write(&lcov_path, "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n").expect("write lcov");
 
         let out = repo.join("report.json");
         let code = run_check(
@@ -1938,7 +1951,10 @@ new file mode 100644
             let original_git_dir = std::env::var("GIT_DIR").ok();
             std::env::set_current_dir(&fallback_dir).expect("set current dir");
             unsafe {
-                std::env::set_var("GIT_DIR", fallback_dir.join("missing").display().to_string());
+                std::env::set_var(
+                    "GIT_DIR",
+                    fallback_dir.join("missing").display().to_string(),
+                );
             }
             let fallback = resolve_repo_root(None);
 
@@ -2295,8 +2311,7 @@ new file mode 100644
 
         for (value, name) in [("warn", "warn"), ("never", "never")] {
             let config_path = temp.join(format!("config-{name}.toml"));
-            fs::write(&config_path, format!("fail_on = \"{value}\""))
-                .expect("write config");
+            fs::write(&config_path, format!("fail_on = \"{value}\"")).expect("write config");
             let out = temp.join(format!("report-{name}.json"));
 
             let code = run_check(
@@ -2499,7 +2514,6 @@ new file mode 100644
         let _ = fs::remove_dir_all(&temp);
     }
 
-
     #[test]
     fn test_write_raw_artifacts_dir_create_error() {
         let temp = temp_dir("covguard-cli-raw-dir-error");
@@ -2508,7 +2522,7 @@ new file mode 100644
         fs::write(&blocking_file, "x").expect("write blocker");
         let raw_dir = blocking_file.join("child");
 
-        let err = write_raw_artifacts_to(&raw_dir, "diff", &vec!["lcov".to_string()])
+        let err = write_raw_artifacts_to(&raw_dir, "diff", &["lcov".to_string()])
             .expect_err("expected dir create error");
         assert!(matches!(err, CliError::DirCreate { .. }));
 
@@ -2522,7 +2536,7 @@ new file mode 100644
         let raw_dir_file = temp.join("raw");
         fs::write(&raw_dir_file, "not a dir").expect("write file");
 
-        let err = write_raw_artifacts_to(&raw_dir_file, "diff", &vec!["lcov".to_string()])
+        let err = write_raw_artifacts_to(&raw_dir_file, "diff", &["lcov".to_string()])
             .expect_err("expected file write error");
         assert!(matches!(err, CliError::FileWrite { .. }));
 
@@ -2537,7 +2551,7 @@ new file mode 100644
         fs::create_dir_all(&raw_dir).expect("create raw dir");
         fs::create_dir_all(raw_dir.join("lcov.info")).expect("create lcov dir");
 
-        let err = write_raw_artifacts_to(&raw_dir, "diff", &vec!["lcov".to_string()])
+        let err = write_raw_artifacts_to(&raw_dir, "diff", &["lcov".to_string()])
             .expect_err("expected file write error");
         assert!(matches!(err, CliError::FileWrite { .. }));
 

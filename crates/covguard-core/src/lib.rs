@@ -1224,8 +1224,8 @@ pub fn detect_ignored_lines<R: RepoReader>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{BTreeMap, BTreeSet};
     use covguard_domain::Metrics;
+    use std::collections::{BTreeMap, BTreeSet};
 
     /// A test clock that returns a fixed time.
     struct FixedClock {
@@ -1264,9 +1264,7 @@ mod tests {
 
     impl RepoReader for MapReader {
         fn read_line(&self, path: &str, line_no: u32) -> Option<String> {
-            self.lines
-                .get(&(path.to_string(), line_no))
-                .cloned()
+            self.lines.get(&(path.to_string(), line_no)).cloned()
         }
     }
 
@@ -2146,7 +2144,10 @@ end_of_record
             .expect("truncation metadata should be present");
         assert!(truncation.findings_truncated);
         assert_eq!(truncation.shown, 0);
-        assert!(truncation.total > 0, "total should reflect pre-truncation count");
+        assert!(
+            truncation.total > 0,
+            "total should reflect pre-truncation count"
+        );
 
         // Reasons should include "truncated"
         let has_trunc_reason = result
@@ -2346,7 +2347,7 @@ end_of_record
 
     #[test]
     fn test_build_debug_populated() {
-        let debug = build_debug(&vec!["assets/logo.png".to_string()]).expect("debug");
+        let debug = build_debug(&["assets/logo.png".to_string()]).expect("debug");
         assert_eq!(debug["binary_files_count"], 1);
         assert_eq!(debug["binary_files"][0], "assets/logo.png");
     }
@@ -2480,18 +2481,12 @@ end_of_record
         fs::write(&file_path, "line1\nline2\nline3\n").expect("write file");
 
         let reader = FsRepoReader::new(&root);
-        assert_eq!(
-            reader.read_line("src/lib.rs", 2),
-            Some("line2".to_string())
-        );
+        assert_eq!(reader.read_line("src/lib.rs", 2), Some("line2".to_string()));
         assert_eq!(reader.read_line("src/lib.rs", 0), None);
         assert_eq!(reader.read_line("src/lib.rs", 99), None);
 
         let abs_path = file_path.to_string_lossy().to_string();
-        assert_eq!(
-            reader.read_line(&abs_path, 1),
-            Some("line1".to_string())
-        );
+        assert_eq!(reader.read_line(&abs_path, 1), Some("line1".to_string()));
 
         let _ = fs::remove_dir_all(&root);
     }
@@ -2660,7 +2655,10 @@ new file mode 100644
         let receipt = receipt.expect("receipt should exist");
         let capabilities = receipt.run.capabilities.expect("capabilities");
         assert_eq!(capabilities.inputs.diff.status, InputStatus::Available);
-        assert_eq!(capabilities.inputs.coverage.status, InputStatus::Unavailable);
+        assert_eq!(
+            capabilities.inputs.coverage.status,
+            InputStatus::Unavailable
+        );
     }
 
     #[test]
@@ -2714,14 +2712,8 @@ new file mode 100644
             ..Default::default()
         };
         let now = chrono::Utc::now();
-        let (domain, receipt) = build_skip_report_pair(
-            &request,
-            now,
-            now,
-            false,
-            true,
-            REASON_MISSING_LCOV,
-        );
+        let (domain, receipt) =
+            build_skip_report_pair(&request, now, now, false, true, REASON_MISSING_LCOV);
         assert_eq!(domain.data.inputs.diff_source, "stdin");
         assert_eq!(domain.data.scope, "touched");
         assert!(receipt.is_none());
@@ -2736,18 +2728,15 @@ new file mode 100644
             ..Default::default()
         };
         let now = chrono::Utc::now();
-        let (_domain, receipt) = build_skip_report_pair(
-            &request,
-            now,
-            now,
-            true,
-            false,
-            REASON_MISSING_LCOV,
-        );
+        let (_domain, receipt) =
+            build_skip_report_pair(&request, now, now, true, false, REASON_MISSING_LCOV);
         let receipt = receipt.expect("receipt should exist");
         let capabilities = receipt.run.capabilities.expect("capabilities");
         assert_eq!(capabilities.inputs.diff.status, InputStatus::Available);
-        assert_eq!(capabilities.inputs.coverage.status, InputStatus::Unavailable);
+        assert_eq!(
+            capabilities.inputs.coverage.status,
+            InputStatus::Unavailable
+        );
     }
 
     #[test]
@@ -2757,14 +2746,8 @@ new file mode 100644
             ..Default::default()
         };
         let now = chrono::Utc::now();
-        let (_domain, receipt) = build_skip_report_pair(
-            &request,
-            now,
-            now,
-            false,
-            true,
-            REASON_MISSING_LCOV,
-        );
+        let (_domain, receipt) =
+            build_skip_report_pair(&request, now, now, false, true, REASON_MISSING_LCOV);
         let receipt = receipt.expect("receipt should exist");
         let capabilities = receipt.run.capabilities.expect("capabilities");
         assert_eq!(capabilities.inputs.diff.status, InputStatus::Unavailable);

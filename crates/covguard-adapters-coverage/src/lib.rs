@@ -357,10 +357,7 @@ mod tests {
 
     #[test]
     fn test_normalize_path_with_strip_prefixes() {
-        let prefixes = vec![
-            "/home/runner/work/".to_string(),
-            "C:\\repo\\".to_string(),
-        ];
+        let prefixes = vec!["/home/runner/work/".to_string(), "C:\\repo\\".to_string()];
         assert_eq!(
             normalize_path_with_strip("/home/runner/work/src/lib.rs", &prefixes),
             "src/lib.rs"

@@ -182,7 +182,7 @@ fn cmd_schema(check: bool) -> Result<()> {
         for error in &errors {
             eprintln!("error: {error}");
         }
-        return exit_validation_failure();
+        exit_validation_failure()
     }
 }
 
@@ -575,7 +575,7 @@ fn cmd_validate(report_path: &Path, schema_path: Option<&Path>) -> Result<()> {
         for error in &errors {
             eprintln!("  - {}: {}", error.instance_path(), error);
         }
-        return exit_validation_failure();
+        exit_validation_failure()
     }
 }
 
@@ -1426,6 +1426,28 @@ fn find_project_root() -> Result<PathBuf> {
 }
 
 #[cfg(test)]
+fn conform_survivability(project_root: &Path, _schemas_dir: &Path, _update: bool) -> Result<usize> {
+    if project_root
+        .to_string_lossy()
+        .contains("force-survivability-fail")
+    {
+        bail!("forced survivability failure");
+    }
+    Ok(0)
+}
+
+#[cfg(test)]
+fn conform_determinism(project_root: &Path) -> Result<usize> {
+    if project_root
+        .to_string_lossy()
+        .contains("force-determinism-fail")
+    {
+        bail!("forced determinism failure");
+    }
+    Ok(0)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -1612,7 +1634,9 @@ mod tests {
         let root = temp_workspace("xtask-fixtures-diff");
         fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected");
         fs::write(
-            root.join("fixtures").join("expected").join("report_uncovered.json"),
+            root.join("fixtures")
+                .join("expected")
+                .join("report_uncovered.json"),
             "{}",
         )
         .expect("write expected");
@@ -1819,18 +1843,13 @@ mod tests {
     #[test]
     fn test_cmd_conform_schema_absolute_path_ok() {
         let root = temp_workspace("xtask-conform-abs");
-        let schema_dir = write_schemas(&root, false)
-            .parent()
-            .unwrap()
-            .to_path_buf();
-        fs::create_dir_all(root.join("fixtures").join("expected"))
-            .expect("create expected dir");
+        let schema_dir = write_schemas(&root, false).parent().unwrap().to_path_buf();
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
         write_expected_fixture(&root, "ok.json", "{}");
 
         let schema_dir_str = schema_dir.display().to_string();
         with_current_dir(&root, || {
-            cmd_conform(true, false, false, false, false, &schema_dir_str)
-                .expect("cmd_conform ok");
+            cmd_conform(true, false, false, false, false, &schema_dir_str).expect("cmd_conform ok");
         });
 
         let _ = fs::remove_dir_all(&root);
@@ -1864,8 +1883,7 @@ mod tests {
             r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["foo"]}"#,
         )
         .expect("write envelope");
-        fs::create_dir_all(root.join("fixtures").join("expected"))
-            .expect("create expected dir");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
         write_expected_fixture(&root, "bad.json", "{}");
 
         assert!(conform_schema(&root, &schemas_dir, false).is_err());
@@ -1882,8 +1900,7 @@ mod tests {
             r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["foo"]}"#,
         )
         .expect("write envelope");
-        fs::create_dir_all(root.join("fixtures").join("expected"))
-            .expect("create expected dir");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
         write_expected_fixture(&root, "ok.json", r#"{"foo": 1}"#);
         write_contract_fixture(&root, "bad.json", "{}");
 
@@ -1901,8 +1918,7 @@ mod tests {
             r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
         )
         .expect("write envelope");
-        fs::create_dir_all(root.join("fixtures").join("expected"))
-            .expect("create expected dir");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
         write_expected_fixture(&root, "ok.json", "{}");
         write_contract_fixture(&root, "malformed.json", "{}");
 
@@ -1920,8 +1936,7 @@ mod tests {
             r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
         )
         .expect("write envelope");
-        fs::create_dir_all(root.join("fixtures").join("expected"))
-            .expect("create expected dir");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
         write_expected_fixture(&root, "ok.json", "{}");
         fs::write(
             root.join("fixtures").join("expected").join("note.txt"),
@@ -2034,8 +2049,7 @@ mod tests {
     fn test_find_project_root_missing_workspace_fails() {
         let root = temp_dir("xtask-no-workspace");
         fs::create_dir_all(&root).expect("create dir");
-        fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"")
-            .expect("write Cargo.toml");
+        fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"").expect("write Cargo.toml");
 
         with_current_dir(&root, || {
             assert!(find_project_root().is_err());
@@ -2186,26 +2200,4 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
     }
-}
-
-#[cfg(test)]
-fn conform_survivability(project_root: &Path, _schemas_dir: &Path, _update: bool) -> Result<usize> {
-    if project_root
-        .to_string_lossy()
-        .contains("force-survivability-fail")
-    {
-        bail!("forced survivability failure");
-    }
-    Ok(0)
-}
-
-#[cfg(test)]
-fn conform_determinism(project_root: &Path) -> Result<usize> {
-    if project_root
-        .to_string_lossy()
-        .contains("force-determinism-fail")
-    {
-        bail!("forced determinism failure");
-    }
-    Ok(0)
 }
