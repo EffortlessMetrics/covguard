@@ -1,14 +1,14 @@
 [package]
 name = "xtask"
-description = "Development tasks for covguard"
+description = "Repository maintenance tasks for covguard (schemas, fixtures, validation)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../README.md"
+keywords = ["xtask", "tooling", "schema", "fixtures", "covguard"]
+categories = ["development-tools"]
+readme = "README.md"
 rust-version.workspace = true
 publish = false
 

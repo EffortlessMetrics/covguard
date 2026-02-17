@@ -2,9 +2,11 @@
 resolver = "2"
 members = [
     "crates/covguard-types",
+    "crates/covguard-ports",
     "crates/covguard-domain",
     "crates/covguard-adapters-diff",
     "crates/covguard-adapters-coverage",
+    "crates/covguard-adapters-repo",
     "crates/covguard-render",
     "crates/covguard-config",
     "crates/covguard-app",

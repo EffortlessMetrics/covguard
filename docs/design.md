@@ -211,12 +211,14 @@ Emit SARIF results for uncovered lines and policy failures:
 | Crate | Responsibility |
 |-------|----------------|
 | **covguard-types** | DTOs (Report, Finding, Verdict), schema IDs, error codes, serde |
+| **covguard-ports** | Shared port traits (`Clock`, `RepoReader`) for clean orchestration/adapter boundaries |
 | **covguard-domain** | Policy evaluation, metrics aggregation, deterministic ordering, ignore directive detection |
 | **covguard-config** | TOML parsing, profiles (Oss/Moderate/Team/Strict), precedence resolution |
 | **covguard-adapters-diff** | Unified diff parsing, path normalization, range merging |
 | **covguard-adapters-coverage** | LCOV parsing, coverage map merging |
+| **covguard-adapters-repo** | Filesystem `RepoReader` implementation for ignore directive inspection |
 | **covguard-render** | Markdown, GitHub annotations, SARIF renderers |
-| **covguard-app** | Orchestration, Clock/RepoReader traits, `check()` entry point |
+| **covguard-app** | Orchestration and report assembly, `check()` entry point |
 | **covguard-cli** | Clap CLI, file I/O, exit code mapping |
 | **xtask** | Schema generation, fixture management |
 

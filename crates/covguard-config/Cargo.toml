@@ -1,14 +1,15 @@
 [package]
 name = "covguard-config"
-description = "Configuration parsing, profiles, and CLI precedence resolution for covguard"
+description = "Configuration loading, profile defaults, and CLI precedence resolution for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../../README.md"
+documentation = "https://docs.rs/covguard-config"
+keywords = ["config", "toml", "coverage", "policy", "ci"]
+categories = ["config", "development-tools::testing"]
+readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]

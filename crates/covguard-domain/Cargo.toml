@@ -1,14 +1,15 @@
 [package]
 name = "covguard-domain"
-description = "Pure domain logic for covguard diff coverage policy evaluation"
+description = "Pure policy evaluation engine for diff-scoped coverage decisions"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../../README.md"
+documentation = "https://docs.rs/covguard-domain"
+keywords = ["coverage", "diff", "policy", "testing", "quality"]
+categories = ["development-tools::testing"]
+readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]

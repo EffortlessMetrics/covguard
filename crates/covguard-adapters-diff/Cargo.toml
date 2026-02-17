@@ -1,18 +1,20 @@
 [package]
 name = "covguard-adapters-diff"
-description = "Unified diff parsing adapter for covguard"
+description = "Unified diff parsing and git-diff loading adapter for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../../README.md"
+documentation = "https://docs.rs/covguard-adapters-diff"
+keywords = ["diff", "patch", "parser", "coverage", "testing"]
+categories = ["parser-implementations", "development-tools::testing"]
+readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
 
 [dev-dependencies]
 proptest = "1.10.0"

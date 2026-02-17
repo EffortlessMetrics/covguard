@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 
+use covguard_ports::CoverageProvider;
 use thiserror::Error;
 
 // ============================================================================
@@ -31,6 +32,19 @@ pub enum LcovError {
     /// I/O error while reading the file.
     #[error("I/O error: {0}")]
     IoError(String),
+}
+
+/// Default LCOV coverage provider backed by this crate's parser and merger.
+pub struct LcovCoverageProvider;
+
+impl CoverageProvider for LcovCoverageProvider {
+    fn parse_lcov(&self, text: &str, strip_prefixes: &[String]) -> Result<covguard_ports::CoverageMap, String> {
+        parse_lcov_with_strip(text, strip_prefixes).map_err(|e| e.to_string())
+    }
+
+    fn merge_coverage(&self, maps: Vec<covguard_ports::CoverageMap>) -> covguard_ports::CoverageMap {
+        merge_coverage(maps)
+    }
 }
 
 // ============================================================================
@@ -312,6 +326,7 @@ pub fn get_hits(map: &CoverageMap, path: &str, line: u32) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use covguard_ports::CoverageProvider;
 
     // ------------------------------------------------------------------------
     // Path Normalization Tests
@@ -741,6 +756,19 @@ end_of_record
         let coverage: CoverageMap = BTreeMap::new();
 
         assert_eq!(get_hits(&coverage, "nonexistent.rs", 1), None);
+    }
+
+    #[test]
+    fn test_lcov_coverage_provider_parse_and_merge() {
+        let provider = LcovCoverageProvider;
+        let map1 = provider
+            .parse_lcov("SF:src/lib.rs\nDA:1,0\nend_of_record\n", &[])
+            .expect("parse first");
+        let map2 = provider
+            .parse_lcov("SF:src/lib.rs\nDA:1,2\nend_of_record\n", &[])
+            .expect("parse second");
+        let merged = provider.merge_coverage(vec![map1, map2]);
+        assert_eq!(get_hits(&merged, "src/lib.rs", 1), Some(2));
     }
 }
 

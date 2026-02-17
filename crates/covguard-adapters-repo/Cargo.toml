@@ -1,0 +1,16 @@
+[package]
+name = "covguard-adapters-repo"
+description = "Filesystem-backed RepoReader adapter for covguard ignore-directive lookup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-adapters-repo"
+keywords = ["filesystem", "repository", "adapter", "coverage", "testing"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+covguard-ports = { path = "../covguard-ports", version = "0.2.0" }

@@ -1,18 +1,20 @@
 [package]
 name = "covguard-app"
-description = "High-level orchestration layer for covguard diff coverage analysis"
+description = "Application orchestration for diff parsing, coverage parsing, evaluation, and report output"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../../README.md"
+documentation = "https://docs.rs/covguard-app"
+keywords = ["orchestration", "coverage", "diff", "testing", "ci"]
+categories = ["development-tools::testing"]
+readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
 covguard-types = { path = "../covguard-types", version = "0.2.0" }
+covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
 covguard-domain = { path = "../covguard-domain", version = "0.2.0" }
 covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.2.0" }
 covguard-adapters-coverage = { path = "../covguard-adapters-coverage", version = "0.2.0" }

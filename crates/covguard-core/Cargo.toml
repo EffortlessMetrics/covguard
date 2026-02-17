@@ -1,14 +1,15 @@
 [package]
 name = "covguard-core"
-description = "Backward-compatible re-export facade for covguard-app"
+description = "Backward-compatible facade crate that re-exports covguard-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../../README.md"
+documentation = "https://docs.rs/covguard-core"
+keywords = ["coverage", "diff", "facade", "compatibility", "testing"]
+categories = ["development-tools::testing"]
+readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]

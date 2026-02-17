@@ -21,8 +21,8 @@ This crate orchestrates the entire diff coverage pipeline, connecting adapters (
   - `annotations` - GitHub annotations (if requested)
   - `sarif` - SARIF JSON (if requested)
   - `exit_code` - 0, 1, or 2
-- **`Clock` / `SystemClock`** - Time provider trait for testability
-- **`RepoReader` / `NullReader`** - Source file reader for ignore directives
+- **`Clock` / `SystemClock`** - Time provider abstraction + system implementation
+- **`RepoReader`** - Re-exported port trait used for ignore directives
 
 ## Key Functions
 
@@ -72,6 +72,7 @@ When `ignore_directives` is enabled and source paths are provided:
 ## Dependencies
 
 - `covguard-types` - DTOs
+- `covguard-ports` - Shared port traits
 - `covguard-domain` - Evaluation logic
 - `covguard-adapters-diff` - Diff parsing
 - `covguard-adapters-coverage` - LCOV parsing

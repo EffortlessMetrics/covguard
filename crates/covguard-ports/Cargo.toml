@@ -1,0 +1,16 @@
+[package]
+name = "covguard-ports"
+description = "Port traits and boundary types for covguard adapters and app orchestration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-ports"
+keywords = ["hexagonal", "ports", "coverage", "diff", "testing"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+chrono.workspace = true

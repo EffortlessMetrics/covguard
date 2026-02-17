@@ -29,10 +29,11 @@
 //! println!("Exit code: {}", result.exit_code);
 //! ```
 
-use covguard_adapters_coverage::{CoverageMap, LcovError, merge_coverage, parse_lcov_with_strip};
-use covguard_adapters_diff::{DiffError, parse_patch_with_meta};
+use covguard_adapters_coverage::LcovError;
+use covguard_adapters_diff::DiffError;
 use covguard_config::should_include_path;
 pub use covguard_domain::MissingBehavior;
+pub use covguard_ports::{Clock, CoverageMap, CoverageProvider, DiffProvider, RepoReader};
 use covguard_domain::{
     EvalInput, EvalOutput, Policy, Scope as DomainScope, evaluate, has_ignore_directive,
 };
@@ -50,21 +51,12 @@ use covguard_types::{
     Truncation, Verdict, VerdictCounts, VerdictStatus, compute_fingerprint,
 };
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::{Path, PathBuf};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 // ============================================================================
 // Clock Trait
 // ============================================================================
-
-/// A trait for obtaining the current time.
-///
-/// This allows for testing with deterministic timestamps.
-pub trait Clock {
-    /// Get the current time in UTC.
-    fn now(&self) -> chrono::DateTime<chrono::Utc>;
-}
 
 /// System clock implementation that returns the actual current time.
 pub struct SystemClock;
@@ -79,66 +71,13 @@ impl Clock for SystemClock {
 // Request and Result Types
 // ============================================================================
 
-/// Trait for reading source file lines.
-///
-/// This allows detection of `covguard: ignore` directives in source code.
-pub trait RepoReader {
-    /// Read a specific line from a file.
-    ///
-    /// Returns `None` if the file doesn't exist or the line is out of bounds.
-    fn read_line(&self, path: &str, line_no: u32) -> Option<String>;
-}
-
 /// A no-op reader that returns None for all lines.
 /// Used when ignore directives are disabled.
-pub struct NullReader;
+struct NullReader;
 
 impl RepoReader for NullReader {
     fn read_line(&self, _path: &str, _line_no: u32) -> Option<String> {
         None
-    }
-}
-
-/// Filesystem-backed repo reader with line caching.
-pub struct FsRepoReader {
-    root: PathBuf,
-    cache: std::sync::Mutex<HashMap<String, Vec<String>>>,
-}
-
-impl FsRepoReader {
-    /// Create a new filesystem reader rooted at `root`.
-    pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self {
-            root: root.into(),
-            cache: std::sync::Mutex::new(HashMap::new()),
-        }
-    }
-
-    fn read_file_lines(&self, path: &str) -> Option<Vec<String>> {
-        let full_path = if Path::new(path).is_absolute() {
-            PathBuf::from(path)
-        } else {
-            self.root.join(path)
-        };
-        let content = std::fs::read_to_string(full_path).ok()?;
-        Some(content.lines().map(|l| l.to_string()).collect())
-    }
-}
-
-impl RepoReader for FsRepoReader {
-    fn read_line(&self, path: &str, line_no: u32) -> Option<String> {
-        if line_no == 0 {
-            return None;
-        }
-        let mut cache = self.cache.lock().ok()?;
-        if !cache.contains_key(path) {
-            let lines = self.read_file_lines(path)?;
-            cache.insert(path.to_string(), lines);
-        }
-        cache
-            .get(path)
-            .and_then(|lines| lines.get((line_no - 1) as usize))
-            .cloned()
     }
 }
 
@@ -322,6 +261,27 @@ pub fn check_with_clock_and_reader<C: Clock, R: RepoReader>(
     clock: &C,
     reader: &R,
 ) -> Result<CheckResult, AppError> {
+    let diff_provider = covguard_adapters_diff::GitDiffProvider;
+    let coverage_provider = covguard_adapters_coverage::LcovCoverageProvider;
+    check_with_providers_and_reader(request, clock, reader, &diff_provider, &coverage_provider)
+}
+
+/// Run a diff coverage check with pluggable diff and coverage providers.
+///
+/// This enables fully port-driven orchestration while preserving the default
+/// API surface for callers that use built-in adapters.
+pub fn check_with_providers_and_reader<
+    C: Clock,
+    R: RepoReader,
+    D: DiffProvider,
+    P: CoverageProvider,
+>(
+    request: CheckRequest,
+    clock: &C,
+    reader: &R,
+    diff_provider: &D,
+    coverage_provider: &P,
+) -> Result<CheckResult, AppError> {
     let started_at = clock.now();
 
     // Determine diff availability
@@ -359,7 +319,7 @@ pub fn check_with_clock_and_reader<C: Clock, R: RepoReader>(
     }
 
     // Parse the diff
-    let parse_result = match parse_patch_with_meta(&request.diff_text) {
+    let parse_result = match diff_provider.parse_patch(&request.diff_text) {
         Ok(ranges) => ranges,
         Err(e) => {
             return Ok(build_error_result(
@@ -393,7 +353,7 @@ pub fn check_with_clock_and_reader<C: Clock, R: RepoReader>(
                 clock,
             ));
         }
-        match parse_lcov_with_strip(lcov_text, &request.path_strip) {
+        match coverage_provider.parse_lcov(lcov_text, &request.path_strip) {
             Ok(map) => coverage_maps.push(map),
             Err(e) => {
                 return Ok(build_error_result(
@@ -408,7 +368,7 @@ pub fn check_with_clock_and_reader<C: Clock, R: RepoReader>(
             }
         }
     }
-    let coverage: CoverageMap = merge_coverage(coverage_maps);
+    let coverage: CoverageMap = coverage_provider.merge_coverage(coverage_maps);
 
     // Detect ignored lines
     let mut filtered_ranges = changed_ranges;
@@ -1226,6 +1186,7 @@ mod tests {
     use super::*;
     use covguard_domain::Metrics;
     use std::collections::{BTreeMap, BTreeSet};
+    use std::path::Path;
 
     /// A test clock that returns a fixed time.
     struct FixedClock {
@@ -1265,6 +1226,45 @@ mod tests {
     impl RepoReader for MapReader {
         fn read_line(&self, path: &str, line_no: u32) -> Option<String> {
             self.lines.get(&(path.to_string(), line_no)).cloned()
+        }
+    }
+
+    struct FakeDiffProvider {
+        parsed: covguard_ports::DiffParseResult,
+    }
+
+    impl DiffProvider for FakeDiffProvider {
+        fn parse_patch(&self, _text: &str) -> Result<covguard_ports::DiffParseResult, String> {
+            Ok(self.parsed.clone())
+        }
+
+        fn load_diff_from_git(
+            &self,
+            _base: &str,
+            _head: &str,
+            _repo_root: &Path,
+        ) -> Result<String, String> {
+            Ok(String::new())
+        }
+    }
+
+    struct FakeCoverageProvider {
+        map: CoverageMap,
+    }
+
+    impl CoverageProvider for FakeCoverageProvider {
+        fn parse_lcov(&self, _text: &str, _strip_prefixes: &[String]) -> Result<CoverageMap, String> {
+            Ok(self.map.clone())
+        }
+
+        fn merge_coverage(&self, maps: Vec<CoverageMap>) -> CoverageMap {
+            let mut merged = BTreeMap::new();
+            for map in maps {
+                for (path, lines) in map {
+                    merged.insert(path, lines);
+                }
+            }
+            merged
         }
     }
 
@@ -1329,6 +1329,47 @@ end_of_record
         // Verify annotations are present
         assert!(!result.annotations.is_empty());
         assert!(result.annotations.contains("::error"));
+    }
+
+    #[test]
+    fn test_check_with_providers_uses_injected_ports() {
+        let request = CheckRequest {
+            // This would fail with the built-in parser due to malformed hunk header.
+            diff_text: "diff --git a/src/lib.rs b/src/lib.rs\n@@ -1,1 @@\n+line\n".to_string(),
+            lcov_texts: vec!["SF:src/lib.rs\nDA:1,1\nend_of_record\n".to_string()],
+            scope: Scope::Added,
+            ..Default::default()
+        };
+
+        let mut changed_ranges = BTreeMap::new();
+        changed_ranges.insert("src/lib.rs".to_string(), vec![1..=1]);
+        let diff_provider = FakeDiffProvider {
+            parsed: covguard_ports::DiffParseResult {
+                changed_ranges,
+                binary_files: Vec::new(),
+            },
+        };
+
+        let mut coverage_lines = BTreeMap::new();
+        coverage_lines.insert(1, 1);
+        let mut coverage_map = BTreeMap::new();
+        coverage_map.insert("src/lib.rs".to_string(), coverage_lines);
+        let coverage_provider = FakeCoverageProvider { map: coverage_map };
+
+        let clock = FixedClock::new("2026-02-02T00:00:00Z");
+        let result = check_with_providers_and_reader(
+            request,
+            &clock,
+            &NullReader,
+            &diff_provider,
+            &coverage_provider,
+        )
+        .unwrap();
+
+        assert_eq!(result.report.verdict.status, VerdictStatus::Pass);
+        assert_eq!(result.report.data.changed_lines_total, 1);
+        assert_eq!(result.report.data.covered_lines, 1);
+        assert_eq!(result.report.findings.len(), 0);
     }
 
     #[test]
@@ -2463,32 +2504,6 @@ end_of_record
         let reader = MapReader::new(vec![("src/lib.rs", 1, "let x = 1;")]);
         let ignored = detect_ignored_lines(&changed_ranges, &reader);
         assert!(ignored.is_empty());
-    }
-
-    #[test]
-    fn test_fs_repo_reader_reads_relative_and_absolute() {
-        use std::fs;
-
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("covguard-app-reader-{unique}"));
-        let src_dir = root.join("src");
-        fs::create_dir_all(&src_dir).expect("create temp dir");
-
-        let file_path = src_dir.join("lib.rs");
-        fs::write(&file_path, "line1\nline2\nline3\n").expect("write file");
-
-        let reader = FsRepoReader::new(&root);
-        assert_eq!(reader.read_line("src/lib.rs", 2), Some("line2".to_string()));
-        assert_eq!(reader.read_line("src/lib.rs", 0), None);
-        assert_eq!(reader.read_line("src/lib.rs", 99), None);
-
-        let abs_path = file_path.to_string_lossy().to_string();
-        assert_eq!(reader.read_line(&abs_path, 1), Some("line1".to_string()));
-
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
