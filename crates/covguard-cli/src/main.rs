@@ -3,12 +3,12 @@
 //! This CLI tool checks whether changed lines in a pull request are covered by tests.
 
 use clap::{Parser, Subcommand, ValueEnum};
-use covguard_config::{
-    CliOverrides, Profile, Scope as ConfigScope, discover_config, load_config, resolve_config,
-};
-use covguard_core::{
+use covguard_app::{
     AppError, CheckRequest, FailOn, FsRepoReader, MissingBehavior, SystemClock,
     check_with_clock_and_reader,
+};
+use covguard_config::{
+    CliOverrides, Profile, Scope as ConfigScope, discover_config, load_config, resolve_config,
 };
 #[cfg(test)]
 use covguard_types::CODE_UNCOVERED_LINE;
@@ -787,7 +787,7 @@ fn write_fallback_receipt(
         schema: SENSOR_SCHEMA_ID.to_string(),
         tool: Tool {
             name: "covguard".to_string(),
-            version: "0.2.0".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
             commit: None,
         },
         run: Run {

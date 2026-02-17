@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use covguard_core::{CheckRequest, FailOn, check};
+use covguard_app::{CheckRequest, FailOn, check};
 use covguard_types::{CODE_UNCOVERED_LINE, Scope, Severity, VerdictStatus};
 use cucumber::{World, given, then, when};
 
@@ -34,7 +34,7 @@ pub struct CovguardWorld {
     /// Pre-computed ignored lines for testing.
     ignored_lines: BTreeMap<String, BTreeSet<u32>>,
     /// The result of running check().
-    result: Option<covguard_core::CheckResult>,
+    result: Option<covguard_app::CheckResult>,
     /// Whether an error occurred during check.
     check_error: Option<String>,
     /// The file path used in the current scenario.
@@ -1214,7 +1214,7 @@ fn then_check_succeeds(world: &mut CovguardWorld) {
 #[then(expr = "the markdown output contains {string}")]
 fn then_markdown_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let markdown = covguard_core::render_markdown(&result.report);
+    let markdown = covguard_app::render_markdown(&result.report);
 
     assert!(
         markdown.to_lowercase().contains(&expected.to_lowercase()),
@@ -1228,7 +1228,7 @@ fn then_markdown_contains(world: &mut CovguardWorld, expected: String) {
 #[then("the SARIF output is valid JSON")]
 fn then_sarif_is_valid_json(world: &mut CovguardWorld) {
     let result = world.result.as_ref().expect("check should have been run");
-    let sarif = covguard_core::render_sarif(&result.report);
+    let sarif = covguard_app::render_sarif(&result.report);
 
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&sarif);
     assert!(
@@ -1242,7 +1242,7 @@ fn then_sarif_is_valid_json(world: &mut CovguardWorld) {
 #[then(expr = "the SARIF output contains {string}")]
 fn then_sarif_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let sarif = covguard_core::render_sarif(&result.report);
+    let sarif = covguard_app::render_sarif(&result.report);
 
     assert!(
         sarif.contains(&expected),
@@ -1256,7 +1256,7 @@ fn then_sarif_contains(world: &mut CovguardWorld, expected: String) {
 #[then(expr = "the annotations output contains {string}")]
 fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let annotations = covguard_core::render_annotations(&result.report);
+    let annotations = covguard_app::render_annotations(&result.report);
 
     assert!(
         annotations.contains(&expected),

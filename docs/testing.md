@@ -11,6 +11,7 @@ cargo test
 # Specific crate tests
 cargo test --package covguard-domain
 cargo test --package covguard-app
+cargo test --package covguard
 cargo test --package covguard-adapters-diff
 cargo test --package covguard-adapters-coverage
 
@@ -34,7 +35,9 @@ cd fuzz && cargo +nightly fuzz run fuzz_diff_parser
 | covguard-adapters-diff | Unit + Property tests | `crates/covguard-adapters-diff/src/lib.rs` |
 | covguard-adapters-coverage | Unit + Property tests | `crates/covguard-adapters-coverage/src/lib.rs` |
 | covguard-render | Unit + Snapshot tests | `crates/covguard-render/src/lib.rs` |
-| covguard-app | Integration + Snapshot tests | `crates/covguard-app/src/lib.rs`, `crates/covguard-app/tests/` |
+| covguard-app | Integration + Snapshot tests + BDD + schema tests | `crates/covguard-app/src/lib.rs`, `crates/covguard-app/tests/` |
+| covguard-core | Compatibility facade (re-export only, no dedicated test suite) | `crates/covguard-core/src/lib.rs` |
+| covguard | CLI unit + integration tests | `crates/covguard-cli/src/main.rs`, `crates/covguard-cli/tests/integration.rs` |
 
 ## Mutation Testing with cargo-mutants
 
@@ -177,7 +180,7 @@ fixtures/
     └── ...
 ```
 
-### BDD Tests (Cucumber) — Planned
+### BDD Tests (Cucumber)
 
 End-to-end scenarios in `bdd/features/`. Tests the full pipeline from
 diff + LCOV input to JSON/Markdown output.

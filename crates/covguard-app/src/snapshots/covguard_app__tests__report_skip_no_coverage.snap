@@ -1,18 +1,17 @@
 ---
-source: crates/covguard-core/src/lib.rs
+source: crates/covguard-app/src/lib.rs
+assertion_line: 2093
 expression: report_json
 ---
 {
   "data": {
-    "changed_lines_total": 3,
-    "covered_lines": 3,
-    "diff_coverage_pct": 100.0,
+    "changed_lines_total": 0,
+    "covered_lines": 0,
+    "diff_coverage_pct": 0.0,
     "inputs": {
-      "diff_file": "fixtures/diff/simple_added.patch",
+      "diff_file": "fixtures/diff/simple.patch",
       "diff_source": "diff-file",
-      "lcov_paths": [
-        "fixtures/lcov/covered.info"
-      ]
+      "lcov_paths": []
     },
     "missing_lines": 0,
     "scope": "added",
@@ -37,8 +36,8 @@ expression: report_json
       "warn": 0
     },
     "reasons": [
-      "diff_covered"
+      "missing_lcov"
     ],
-    "status": "pass"
+    "status": "skip"
   }
 }

@@ -344,8 +344,8 @@ dependencies = [
  "assert_cmd",
  "chrono",
  "clap",
+ "covguard-app",
  "covguard-config",
- "covguard-core",
  "covguard-types",
  "predicates",
  "proptest",
@@ -371,17 +371,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "covguard-config"
-version = "0.2.0"
-dependencies = [
- "glob",
- "serde",
- "thiserror 2.0.18",
- "toml",
-]
-
-[[package]]
-name = "covguard-core"
+name = "covguard-app"
 version = "0.2.0"
 dependencies = [
  "chrono",
@@ -397,6 +387,23 @@ dependencies = [
  "jsonschema",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "covguard-config"
+version = "0.2.0"
+dependencies = [
+ "glob",
+ "serde",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
+name = "covguard-core"
+version = "0.2.0"
+dependencies = [
+ "covguard-app",
 ]
 
 [[package]]

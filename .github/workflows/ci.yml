@@ -75,7 +75,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run BDD tests
-        run: cargo test --package covguard-core --test bdd
+        run: cargo test --package covguard-app --test bdd
 
   # Property tests (proptest) - run with more iterations in CI
   property-tests:

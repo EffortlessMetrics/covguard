@@ -102,19 +102,28 @@ fn main() -> std::process::ExitCode {
     std::process::ExitCode::from(u8::try_from(code).unwrap_or(1))
 }
 
+fn clap_exit(err: clap::Error) -> i32 {
+    let _ = err.print();
+    err.exit_code()
+}
+
 fn main_impl(args: Vec<String>) -> i32 {
-    match run_cli_with_args(args) {
-        Ok(_) => 0,
-        Err(e) => {
-            if e.to_string().contains("validation failure") {
-                return 2;
+    match Cli::try_parse_from(&args) {
+        Ok(cli) => match run_cli(cli) {
+            Ok(_) => 0,
+            Err(e) => {
+                if e.to_string().contains("validation failure") {
+                    return 2;
+                }
+                eprintln!("error: {e:#}");
+                1
             }
-            eprintln!("error: {e:#}");
-            1
-        }
+        },
+        Err(clap_err) => clap_exit(clap_err),
     }
 }
 
+#[cfg(test)]
 fn run_cli_with_args(args: Vec<String>) -> Result<()> {
     let cli = Cli::try_parse_from(&args)?;
     run_cli(cli)

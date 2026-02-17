@@ -16,9 +16,9 @@ name = "covguard"
 path = "src/main.rs"
 
 [dependencies]
-covguard-types = { path = "../covguard-types" }
-covguard-core = { path = "../covguard-core" }
-covguard-config = { path = "../covguard-config" }
+covguard-types = { path = "../covguard-types", version = "0.2.0" }
+covguard-app = { path = "../covguard-app", version = "0.2.0" }
+covguard-config = { path = "../covguard-config", version = "0.2.0" }
 clap = { version = "4.5.57", features = ["derive"] }
 chrono.workspace = true
 serde_json.workspace = true

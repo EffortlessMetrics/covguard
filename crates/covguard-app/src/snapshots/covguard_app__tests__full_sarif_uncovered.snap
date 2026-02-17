@@ -1,5 +1,6 @@
 ---
 source: crates/covguard-app/src/lib.rs
+assertion_line: 1921
 expression: sarif_json
 ---
 {
