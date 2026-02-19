@@ -21,7 +21,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 [workspace.package]
 version = "0.2.0"
 edition = "2024"
-license = "Apache-2.0 or MIT"
+license = "Apache-2.0 OR MIT"
 repository = "https://github.com/effortlessmetrics/cov-guard"
 homepage = "https://github.com/effortlessmetrics/cov-guard"
 readme = "README.md"
