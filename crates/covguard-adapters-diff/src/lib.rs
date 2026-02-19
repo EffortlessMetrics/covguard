@@ -5,7 +5,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::RangeInclusive;
+use std::path::Path;
 
+use covguard_ports::{DiffParseResult as PortDiffParseResult, DiffProvider};
 use thiserror::Error;
 
 // ============================================================================
@@ -37,6 +39,43 @@ pub enum DiffError {
     /// An I/O error occurred while reading the diff.
     #[error("I/O error: {0}")]
     IoError(String),
+}
+
+/// Default diff provider backed by git subprocess calls and unified diff parsing.
+pub struct GitDiffProvider;
+
+impl DiffProvider for GitDiffProvider {
+    fn parse_patch(&self, text: &str) -> Result<PortDiffParseResult, String> {
+        parse_patch_with_meta(text)
+            .map(|parsed| PortDiffParseResult {
+                changed_ranges: parsed.changed_ranges,
+                binary_files: parsed.binary_files,
+            })
+            .map_err(|e| e.to_string())
+    }
+
+    fn load_diff_from_git(
+        &self,
+        base: &str,
+        head: &str,
+        repo_root: &Path,
+    ) -> Result<String, String> {
+        load_diff_from_git(base, head, repo_root).map_err(|e| e.to_string())
+    }
+}
+
+/// Load unified diff text from git for a `base..head` range.
+///
+/// This is an adapter boundary for subprocess interaction.
+pub fn load_diff_from_git(base: &str, head: &str, repo_root: &Path) -> Result<String, DiffError> {
+    let output = std::process::Command::new("git")
+        .current_dir(repo_root)
+        .args(["diff", base, head])
+        .output()
+        .map_err(|e| DiffError::IoError(e.to_string()))?;
+    // Preserve prior CLI behavior: if git exits non-zero, still return stdout.
+    // The caller can then treat empty output as "no changed lines".
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 // ============================================================================
@@ -316,10 +355,8 @@ pub fn parse_patch_with_meta(text: &str) -> Result<DiffParseResult, DiffError> {
     // Convert line lists to merged ranges
     let mut ranges: ChangedRanges = BTreeMap::new();
     for (file, lines) in result {
-        if !lines.is_empty() {
-            let line_ranges: Vec<RangeInclusive<u32>> = lines.into_iter().map(|l| l..=l).collect();
-            ranges.insert(file, merge_ranges(line_ranges));
-        }
+        let line_ranges: Vec<RangeInclusive<u32>> = lines.into_iter().map(|l| l..=l).collect();
+        ranges.insert(file, merge_ranges(line_ranges));
     }
     // Remove any binary files from the ranges
     for binary in &binary_files {
@@ -358,6 +395,8 @@ fn parse_hunk_header(line: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use covguard_ports::DiffProvider;
+    use std::fs;
 
     #[test]
     fn test_normalize_path_b_prefix() {
@@ -621,6 +660,30 @@ Binary files a/assets/logo.png and b/assets/logo.png differ
     }
 
     #[test]
+    fn test_parse_patch_binary_files_marker_dev_null() {
+        let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222
+Binary files a/assets/logo.png and /dev/null differ
+"#;
+
+        let result = parse_patch_with_meta(diff).unwrap();
+        assert!(result.changed_ranges.is_empty());
+        assert!(result.binary_files.is_empty());
+    }
+
+    #[test]
+    fn test_parse_patch_binary_files_marker_without_and() {
+        let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222
+Binary files a/assets/logo.png differ
+"#;
+
+        let result = parse_patch_with_meta(diff).unwrap();
+        assert!(result.changed_ranges.is_empty());
+        assert!(result.binary_files.is_empty());
+    }
+
+    #[test]
     fn test_parse_patch_git_binary_patch_marker() {
         let diff = r#"diff --git a/assets/data.bin b/assets/data.bin
 index 1111111..2222222
@@ -635,6 +698,35 @@ HcmV?d00001
     }
 
     #[test]
+    fn test_parse_patch_malformed_hunk_header_returns_error() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+index 1111111..2222222 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,1 @@
++line
+"#;
+
+        let result = parse_patch(diff);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_patch_empty_line_in_hunk() {
+        let diff = "diff --git a/src/lib.rs b/src/lib.rs\n\
+index 1111111..2222222 100644\n\
+--- a/src/lib.rs\n\
++++ b/src/lib.rs\n\
+@@ -1,1 +1,3 @@\n\
++line1\n\
+\n\
++line2\n";
+
+        let ranges = parse_patch(diff).unwrap();
+        assert_eq!(ranges.get("src/lib.rs"), Some(&vec![1..=1, 3..=3]));
+    }
+
+    #[test]
     fn test_parse_hunk_header_with_counts() {
         let line = "@@ -10,5 +20,8 @@ fn context()";
         assert_eq!(parse_hunk_header(line), Some(20));
@@ -644,6 +736,12 @@ HcmV?d00001
     fn test_parse_hunk_header_without_counts() {
         let line = "@@ -1 +1 @@";
         assert_eq!(parse_hunk_header(line), Some(1));
+    }
+
+    #[test]
+    fn test_parse_hunk_header_missing_plus_returns_none() {
+        let line = "@@ -10,5 @@ fn context()";
+        assert_eq!(parse_hunk_header(line), None);
     }
 
     #[test]
@@ -710,6 +808,99 @@ fn main() {
         assert_eq!(ranges.len(), 1);
         // Line 2 is the added line
         assert_eq!(ranges.get("src/lib.rs"), Some(&vec![2..=2]));
+    }
+
+    #[test]
+    fn test_load_diff_from_git_bad_repo_path_returns_io_error() {
+        let temp = std::env::temp_dir().join(format!(
+            "covguard-diff-adapter-missing-{}",
+            std::process::id()
+        ));
+        let err = load_diff_from_git("HEAD~1", "HEAD", &temp).expect_err("expected error");
+        assert!(matches!(err, DiffError::IoError(_)));
+    }
+
+    #[test]
+    fn test_load_diff_from_git_success_in_temp_repo() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("covguard-diff-adapter-{unique}"));
+        fs::create_dir_all(&root).expect("create temp dir");
+
+        let init = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["init"])
+            .output()
+            .expect("git init");
+        assert!(init.status.success());
+
+        let user_name = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["config", "user.name", "covguard-test"])
+            .output()
+            .expect("git config user.name");
+        assert!(user_name.status.success());
+
+        let user_email = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["config", "user.email", "covguard-test@example.com"])
+            .output()
+            .expect("git config user.email");
+        assert!(user_email.status.success());
+
+        fs::write(root.join("a.txt"), "line1\n").expect("write initial file");
+        let add_first = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["add", "a.txt"])
+            .output()
+            .expect("git add first");
+        assert!(add_first.status.success());
+
+        let commit_first = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["commit", "-m", "first"])
+            .output()
+            .expect("git commit first");
+        assert!(commit_first.status.success());
+
+        fs::write(root.join("a.txt"), "line1\nline2\n").expect("write changed file");
+        let add_second = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["add", "a.txt"])
+            .output()
+            .expect("git add second");
+        assert!(add_second.status.success());
+
+        let commit_second = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["commit", "-m", "second"])
+            .output()
+            .expect("git commit second");
+        assert!(commit_second.status.success());
+
+        let diff = load_diff_from_git("HEAD~1", "HEAD", &root).expect("load diff");
+        assert!(diff.contains("diff --git"));
+        assert!(diff.contains("+++ b/a.txt"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_git_diff_provider_parse_patch() {
+        let provider = GitDiffProvider;
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/src/lib.rs
+@@ -0,0 +1,1 @@
++fn main() {}
+"#;
+
+        let parsed = provider.parse_patch(diff).expect("parse via provider");
+        assert_eq!(parsed.changed_ranges.get("src/lib.rs"), Some(&vec![1..=1]));
+        assert!(parsed.binary_files.is_empty());
     }
 }
 

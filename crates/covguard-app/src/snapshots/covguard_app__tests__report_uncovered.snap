@@ -1,5 +1,6 @@
 ---
-source: crates/covguard-core/src/lib.rs
+source: crates/covguard-app/src/lib.rs
+assertion_line: 1730
 expression: report_json
 ---
 {

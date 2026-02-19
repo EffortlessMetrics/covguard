@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 
+use covguard_ports::CoverageProvider;
 use thiserror::Error;
 
 // ============================================================================
@@ -31,6 +32,26 @@ pub enum LcovError {
     /// I/O error while reading the file.
     #[error("I/O error: {0}")]
     IoError(String),
+}
+
+/// Default LCOV coverage provider backed by this crate's parser and merger.
+pub struct LcovCoverageProvider;
+
+impl CoverageProvider for LcovCoverageProvider {
+    fn parse_lcov(
+        &self,
+        text: &str,
+        strip_prefixes: &[String],
+    ) -> Result<covguard_ports::CoverageMap, String> {
+        parse_lcov_with_strip(text, strip_prefixes).map_err(|e| e.to_string())
+    }
+
+    fn merge_coverage(
+        &self,
+        maps: Vec<covguard_ports::CoverageMap>,
+    ) -> covguard_ports::CoverageMap {
+        merge_coverage(maps)
+    }
 }
 
 // ============================================================================
@@ -312,6 +333,7 @@ pub fn get_hits(map: &CoverageMap, path: &str, line: u32) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use covguard_ports::CoverageProvider;
 
     // ------------------------------------------------------------------------
     // Path Normalization Tests
@@ -353,6 +375,27 @@ mod tests {
             "src/lib.rs"
         );
         assert_eq!(normalize_path("D:/code/project/src/main.rs"), "src/main.rs");
+    }
+
+    #[test]
+    fn test_normalize_path_with_strip_prefixes() {
+        let prefixes = vec!["/home/runner/work/".to_string(), "C:\\repo\\".to_string()];
+        assert_eq!(
+            normalize_path_with_strip("/home/runner/work/src/lib.rs", &prefixes),
+            "src/lib.rs"
+        );
+        assert_eq!(
+            normalize_path_with_strip("C:\\repo\\lib\\mod.rs", &prefixes),
+            "lib/mod.rs"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_windows_marker_strips_to_lib() {
+        assert_eq!(
+            normalize_path("C:/code/project/lib/utils.rs"),
+            "lib/utils.rs"
+        );
     }
 
     // ------------------------------------------------------------------------
@@ -424,6 +467,21 @@ end_of_record
         assert_eq!(main.len(), 2);
         assert_eq!(main.get(&5), Some(&0));
         assert_eq!(main.get(&6), Some(&2));
+    }
+
+    #[test]
+    fn test_parse_lcov_merges_duplicate_records_takes_max_hits() {
+        let lcov = r#"TN:test
+SF:src/lib.rs
+DA:1,1
+end_of_record
+SF:src/lib.rs
+DA:1,3
+end_of_record
+"#;
+        let coverage = parse_lcov(lcov).unwrap();
+        let file = coverage.get("src/lib.rs").unwrap();
+        assert_eq!(file.get(&1), Some(&3));
     }
 
     #[test]
@@ -526,13 +584,10 @@ end_of_record
         let lcov = "DA:1,1\nend_of_record\n";
         let result = parse_lcov(lcov);
 
-        assert!(result.is_err());
-        match result {
-            Err(LcovError::InvalidFormat(msg)) => {
-                assert!(msg.contains("without preceding SF"));
-            }
-            _ => panic!("Expected InvalidFormat error"),
-        }
+        assert!(matches!(
+            result,
+            Err(LcovError::InvalidFormat(msg)) if msg.contains("without preceding SF")
+        ));
     }
 
     #[test]
@@ -540,13 +595,10 @@ end_of_record
         let lcov = "SF:src/lib.rs\nDA:invalid\nend_of_record\n";
         let result = parse_lcov(lcov);
 
-        assert!(result.is_err());
-        match result {
-            Err(LcovError::InvalidFormat(msg)) => {
-                assert!(msg.contains("Invalid DA format"));
-            }
-            _ => panic!("Expected InvalidFormat error"),
-        }
+        assert!(matches!(
+            result,
+            Err(LcovError::InvalidFormat(msg)) if msg.contains("Invalid DA format")
+        ));
     }
 
     #[test]
@@ -554,13 +606,10 @@ end_of_record
         let lcov = "SF:src/lib.rs\nDA:abc,1\nend_of_record\n";
         let result = parse_lcov(lcov);
 
-        assert!(result.is_err());
-        match result {
-            Err(LcovError::InvalidFormat(msg)) => {
-                assert!(msg.contains("Invalid line number"));
-            }
-            _ => panic!("Expected InvalidFormat error"),
-        }
+        assert!(matches!(
+            result,
+            Err(LcovError::InvalidFormat(msg)) if msg.contains("Invalid line number")
+        ));
     }
 
     #[test]
@@ -568,13 +617,10 @@ end_of_record
         let lcov = "SF:src/lib.rs\nDA:1,xyz\nend_of_record\n";
         let result = parse_lcov(lcov);
 
-        assert!(result.is_err());
-        match result {
-            Err(LcovError::InvalidFormat(msg)) => {
-                assert!(msg.contains("Invalid hit count"));
-            }
-            _ => panic!("Expected InvalidFormat error"),
-        }
+        assert!(matches!(
+            result,
+            Err(LcovError::InvalidFormat(msg)) if msg.contains("Invalid hit count")
+        ));
     }
 
     // ------------------------------------------------------------------------
@@ -717,6 +763,19 @@ end_of_record
         let coverage: CoverageMap = BTreeMap::new();
 
         assert_eq!(get_hits(&coverage, "nonexistent.rs", 1), None);
+    }
+
+    #[test]
+    fn test_lcov_coverage_provider_parse_and_merge() {
+        let provider = LcovCoverageProvider;
+        let map1 = provider
+            .parse_lcov("SF:src/lib.rs\nDA:1,0\nend_of_record\n", &[])
+            .expect("parse first");
+        let map2 = provider
+            .parse_lcov("SF:src/lib.rs\nDA:1,2\nend_of_record\n", &[])
+            .expect("parse second");
+        let merged = provider.merge_coverage(vec![map1, map2]);
+        assert_eq!(get_hits(&merged, "src/lib.rs", 1), Some(2));
     }
 }
 

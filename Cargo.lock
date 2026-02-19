@@ -344,8 +344,10 @@ dependencies = [
  "assert_cmd",
  "chrono",
  "clap",
+ "covguard-adapters-diff",
+ "covguard-adapters-repo",
+ "covguard-app",
  "covguard-config",
- "covguard-core",
  "covguard-types",
  "predicates",
  "proptest",
@@ -358,6 +360,7 @@ dependencies = [
 name = "covguard-adapters-coverage"
 version = "0.2.0"
 dependencies = [
+ "covguard-ports",
  "proptest",
  "thiserror 2.0.18",
 ]
@@ -366,7 +369,35 @@ dependencies = [
 name = "covguard-adapters-diff"
 version = "0.2.0"
 dependencies = [
+ "covguard-ports",
  "proptest",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "covguard-adapters-repo"
+version = "0.2.0"
+dependencies = [
+ "covguard-ports",
+]
+
+[[package]]
+name = "covguard-app"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "covguard-adapters-coverage",
+ "covguard-adapters-diff",
+ "covguard-config",
+ "covguard-domain",
+ "covguard-ports",
+ "covguard-render",
+ "covguard-types",
+ "cucumber",
+ "futures",
+ "insta",
+ "jsonschema",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -384,19 +415,7 @@ dependencies = [
 name = "covguard-core"
 version = "0.2.0"
 dependencies = [
- "chrono",
- "covguard-adapters-coverage",
- "covguard-adapters-diff",
- "covguard-config",
- "covguard-domain",
- "covguard-render",
- "covguard-types",
- "cucumber",
- "futures",
- "insta",
- "jsonschema",
- "serde_json",
- "thiserror 2.0.18",
+ "covguard-app",
 ]
 
 [[package]]
@@ -406,6 +425,13 @@ dependencies = [
  "covguard-types",
  "proptest",
  "serde_json",
+]
+
+[[package]]
+name = "covguard-ports"
+version = "0.2.0"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]

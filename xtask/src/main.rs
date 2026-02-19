@@ -11,6 +11,8 @@ use clap::{Parser, Subcommand};
 use jsonschema::Validator;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::Mutex;
 
 use covguard_types::{
     CODE_UNCOVERED_LINE, Finding, Inputs, REASON_BELOW_THRESHOLD, REASON_DIFF_COVERED,
@@ -20,7 +22,12 @@ use covguard_types::{
 };
 
 /// Exit code for validation failures (matches covguard convention)
-const EXIT_VALIDATION_FAILURE: i32 = 2;
+#[cfg(test)]
+static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+fn exit_validation_failure() -> Result<()> {
+    bail!("validation failure")
+}
 
 /// Development tasks for covguard
 #[derive(Parser)]
@@ -89,10 +96,41 @@ enum Commands {
     },
 }
 
-fn main() {
-    let cli = Cli::parse();
+fn main() -> std::process::ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+    let code = main_impl(args);
+    std::process::ExitCode::from(u8::try_from(code).unwrap_or(1))
+}
 
-    let result = match cli.command {
+fn clap_exit(err: clap::Error) -> i32 {
+    let _ = err.print();
+    err.exit_code()
+}
+
+fn main_impl(args: Vec<String>) -> i32 {
+    match Cli::try_parse_from(&args) {
+        Ok(cli) => match run_cli(cli) {
+            Ok(_) => 0,
+            Err(e) => {
+                if e.to_string().contains("validation failure") {
+                    return 2;
+                }
+                eprintln!("error: {e:#}");
+                1
+            }
+        },
+        Err(clap_err) => clap_exit(clap_err),
+    }
+}
+
+#[cfg(test)]
+fn run_cli_with_args(args: Vec<String>) -> Result<()> {
+    let cli = Cli::try_parse_from(&args)?;
+    run_cli(cli)
+}
+
+fn run_cli(cli: Cli) -> Result<()> {
+    match cli.command {
         Commands::Schema { check } => cmd_schema(check),
         Commands::Fixtures { check, update } => cmd_fixtures(check, update),
         Commands::Validate {
@@ -107,11 +145,6 @@ fn main() {
             update,
             schema_dir,
         } => cmd_conform(schema, determinism, survivability, all, update, &schema_dir),
-    };
-
-    if let Err(e) = result {
-        eprintln!("error: {e:#}");
-        std::process::exit(1);
     }
 }
 
@@ -135,17 +168,18 @@ fn cmd_schema(check: bool) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().is_some_and(|e| e == "json") {
-            match validate_schema_file(&path, &schemas_dir) {
-                Ok(()) => {
-                    validated += 1;
-                    if !check {
-                        println!("  ok: {}", path.file_name().unwrap().to_string_lossy());
-                    }
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        match validate_schema_file(&path, &schemas_dir) {
+            Ok(()) => {
+                validated += 1;
+                if !check {
+                    println!("  ok: {}", path.file_name().unwrap().to_string_lossy());
                 }
-                Err(e) => {
-                    errors.push(format!("{}: {}", path.display(), e));
-                }
+            }
+            Err(e) => {
+                errors.push(format!("{}: {}", path.display(), e));
             }
         }
     }
@@ -157,7 +191,7 @@ fn cmd_schema(check: bool) -> Result<()> {
         for error in &errors {
             eprintln!("error: {error}");
         }
-        std::process::exit(EXIT_VALIDATION_FAILURE);
+        exit_validation_failure()
     }
 }
 
@@ -232,8 +266,8 @@ fn validate_refs(value: &serde_json::Value, schemas_dir: &Path) -> Result<()> {
                 {
                     // Might be a relative filename
                     let ref_path = schemas_dir.join(ref_str);
-                    if ref_path.exists() {
-                        // It's a valid local file reference
+                    if !ref_path.exists() {
+                        bail!("$ref points to non-existent file: {}", ref_str);
                     }
                 }
             }
@@ -307,7 +341,7 @@ fn cmd_fixtures(check: bool, update: bool) -> Result<()> {
 
         if has_differences {
             eprintln!("\nRun 'cargo xtask fixtures --update' to update fixtures.");
-            std::process::exit(EXIT_VALIDATION_FAILURE);
+            return exit_validation_failure();
         } else {
             println!("All {} fixture(s) match.", fixtures.len());
         }
@@ -550,7 +584,7 @@ fn cmd_validate(report_path: &Path, schema_path: Option<&Path>) -> Result<()> {
         for error in &errors {
             eprintln!("  - {}: {}", error.instance_path(), error);
         }
-        std::process::exit(EXIT_VALIDATION_FAILURE);
+        exit_validation_failure()
     }
 }
 
@@ -623,7 +657,7 @@ fn cmd_conform(
     println!("Failed: {failed}");
 
     if failed > 0 {
-        std::process::exit(EXIT_VALIDATION_FAILURE);
+        return exit_validation_failure();
     }
 
     Ok(())
@@ -662,28 +696,29 @@ fn conform_schema(project_root: &Path, schemas_dir: &Path, _update: bool) -> Res
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().is_some_and(|e| e == "json") {
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()))?;
-            let value: serde_json::Value = serde_json::from_str(&content)
-                .with_context(|| format!("invalid JSON in {}", path.display()))?;
-
-            let errors: Vec<_> = validator.iter_errors(&value).collect();
-            if !errors.is_empty() {
-                bail!(
-                    "{} does not conform to schema: {}",
-                    path.file_name().unwrap().to_string_lossy(),
-                    errors
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-            }
-
-            println!("  ok: {}", path.file_name().unwrap().to_string_lossy());
-            count += 1;
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
         }
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let value: serde_json::Value = serde_json::from_str(&content)
+            .with_context(|| format!("invalid JSON in {}", path.display()))?;
+
+        let errors: Vec<_> = validator.iter_errors(&value).collect();
+        if !errors.is_empty() {
+            bail!(
+                "{} does not conform to schema: {}",
+                path.file_name().unwrap().to_string_lossy(),
+                errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+
+        println!("  ok: {}", path.file_name().unwrap().to_string_lossy());
+        count += 1;
     }
 
     // Validate all JSON files in contracts/fixtures (excluding malformed.json)
@@ -771,27 +806,29 @@ fn lint_sensor_constraints(value: &serde_json::Value, filename: &str) -> Result<
 
     // 4. Each input must have valid status
     let valid_statuses = ["available", "unavailable", "skipped"];
-    if let Some(inputs_obj) = inputs.unwrap().as_object() {
-        for (key, input) in inputs_obj {
-            let status = input.get("status").and_then(|s| s.as_str());
+    let inputs_obj = inputs
+        .unwrap()
+        .as_object()
+        .context("run.capabilities.inputs must be an object")?;
+    for (key, input) in inputs_obj {
+        let status = input.get("status").and_then(|s| s.as_str());
+        anyhow::ensure!(
+            status.is_some_and(|s| valid_statuses.contains(&s)),
+            "contracts/fixtures/{}: input '{}' has invalid or missing status",
+            filename,
+            key
+        );
+        // If reason present, must match token pattern
+        if let Some(reason) = input.get("reason").and_then(|r| r.as_str()) {
             anyhow::ensure!(
-                status.is_some_and(|s| valid_statuses.contains(&s)),
-                "contracts/fixtures/{}: input '{}' has invalid or missing status",
+                reason
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                "contracts/fixtures/{}: input '{}' reason '{}' does not match ^[a-z0-9_]+$",
                 filename,
-                key
+                key,
+                reason
             );
-            // If reason present, must match token pattern
-            if let Some(reason) = input.get("reason").and_then(|r| r.as_str()) {
-                anyhow::ensure!(
-                    reason
-                        .chars()
-                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
-                    "contracts/fixtures/{}: input '{}' reason '{}' does not match ^[a-z0-9_]+$",
-                    filename,
-                    key,
-                    reason
-                );
-            }
         }
     }
 
@@ -884,23 +921,21 @@ fn lint_reason_tokens(value: &serde_json::Value, filename: &str) -> Result<()> {
     }
 
     // Check capabilities.inputs.*.reason
-    if let Some(inputs) = value
+    let inputs = value
         .get("run")
         .and_then(|r| r.get("capabilities"))
         .and_then(|c| c.get("inputs"))
-        .and_then(|i| i.as_object())
-    {
-        for (key, cap) in inputs {
-            if let Some(reason) = cap.get("reason").and_then(|r| r.as_str())
-                && !KNOWN_REASON_TOKENS.contains(&reason)
-            {
-                bail!(
-                    "{}: unknown capability reason token '{}' for input '{}'",
-                    filename,
-                    reason,
-                    key
-                );
-            }
+        .and_then(|i| i.as_object());
+    for (key, cap) in inputs.into_iter().flatten() {
+        if let Some(reason) = cap.get("reason").and_then(|r| r.as_str())
+            && !KNOWN_REASON_TOKENS.contains(&reason)
+        {
+            bail!(
+                "{}: unknown capability reason token '{}' for input '{}'",
+                filename,
+                reason,
+                key
+            );
         }
     }
 
@@ -908,6 +943,7 @@ fn lint_reason_tokens(value: &serde_json::Value, filename: &str) -> Result<()> {
 }
 
 /// Test that fixed inputs produce byte-identical output.
+#[cfg(not(test))]
 fn conform_determinism(project_root: &Path) -> Result<usize> {
     use std::process::Command;
 
@@ -992,6 +1028,7 @@ fn conform_determinism(project_root: &Path) -> Result<usize> {
 }
 
 /// Test that invalid inputs produce valid receipts instead of crashing.
+#[cfg(not(test))]
 fn conform_survivability(project_root: &Path, schemas_dir: &Path, update: bool) -> Result<usize> {
     use std::process::Command;
 
@@ -1398,11 +1435,90 @@ fn find_project_root() -> Result<PathBuf> {
 }
 
 #[cfg(test)]
+fn conform_survivability(project_root: &Path, _schemas_dir: &Path, _update: bool) -> Result<usize> {
+    if project_root
+        .to_string_lossy()
+        .contains("force-survivability-fail")
+    {
+        bail!("forced survivability failure");
+    }
+    Ok(0)
+}
+
+#[cfg(test)]
+fn conform_determinism(project_root: &Path) -> Result<usize> {
+    if project_root
+        .to_string_lossy()
+        .contains("force-determinism-fail")
+    {
+        bail!("forced determinism failure");
+    }
+    Ok(0)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{name}-{unique}"))
+    }
+
+    fn temp_workspace(name: &str) -> PathBuf {
+        let root = temp_dir(name);
+        fs::create_dir_all(&root).expect("create workspace dir");
+        fs::write(root.join("Cargo.toml"), "[workspace]\n").expect("write Cargo.toml");
+        root
+    }
+
+    fn with_current_dir<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
+        let _guard = super::TEST_LOCK.lock().expect("lock");
+        let original = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(dir).expect("set current dir");
+        let result = f();
+        std::env::set_current_dir(original).expect("restore current dir");
+        result
+    }
+
+    fn write_schemas(root: &Path, schema_with_ref: bool) -> PathBuf {
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        let envelope_path = schemas_dir.join("receipt.envelope.v1.json");
+        fs::write(
+            &envelope_path,
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
+        )
+        .expect("write envelope schema");
+        let schema_path = schemas_dir.join("covguard.report.v1.json");
+        let schema_content = if schema_with_ref {
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","$ref":"./receipt.envelope.v1.json"}"#
+        } else {
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#
+        };
+        fs::write(&schema_path, schema_content).expect("write schema");
+        schema_path
+    }
+
+    fn write_expected_fixture(root: &Path, name: &str, content: &str) {
+        let expected_dir = root.join("fixtures").join("expected");
+        fs::create_dir_all(&expected_dir).expect("create expected dir");
+        fs::write(expected_dir.join(name), content).expect("write expected fixture");
+    }
+
+    fn write_contract_fixture(root: &Path, name: &str, content: &str) {
+        let contracts_dir = root.join("contracts").join("fixtures");
+        fs::create_dir_all(&contracts_dir).expect("create contracts fixtures dir");
+        fs::write(contracts_dir.join(name), content).expect("write contract fixture");
+    }
 
     #[test]
     fn test_find_project_root() {
+        let _guard = super::TEST_LOCK.lock().expect("lock");
         // This test assumes we're running from within the project
         let root = find_project_root().unwrap();
         assert!(root.join("Cargo.toml").exists());
@@ -1434,5 +1550,663 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(parsed["schema"], "covguard.report.v1");
         assert_eq!(parsed["verdict"]["status"], "pass");
+    }
+
+    #[test]
+    fn test_has_local_file_ref_detects_local_refs() {
+        let value = json!({ "$ref": "./foo.json" });
+        assert!(has_local_file_ref(&value));
+
+        let value = json!({ "nested": { "$ref": "bar.json" } });
+        assert!(has_local_file_ref(&value));
+
+        let value = json!({ "$ref": "http://example.com/schema" });
+        assert!(!has_local_file_ref(&value));
+    }
+
+    #[test]
+    fn test_validate_refs_missing_file_fails() {
+        let dir = temp_dir("xtask-refs-missing");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let value = json!({ "$ref": "./missing.json" });
+        assert!(validate_refs(&value, &dir).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_validate_refs_existing_file_ok() {
+        let dir = temp_dir("xtask-refs-ok");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        fs::write(dir.join("exists.json"), "{}").expect("write ref file");
+        let value = json!({ "$ref": "./exists.json" });
+        assert!(validate_refs(&value, &dir).is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_validate_schema_file_missing_schema_fails() {
+        let dir = temp_dir("xtask-schema-missing");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let schema_path = dir.join("bad.json");
+        fs::write(&schema_path, "{}").expect("write schema");
+        assert!(validate_schema_file(&schema_path, &dir).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_cmd_schema_success_and_missing_dir() {
+        let root = temp_workspace("xtask-schema-ok");
+        write_schemas(&root, false);
+        with_current_dir(&root, || {
+            cmd_schema(true).expect("cmd_schema ok");
+        });
+
+        let root_missing = temp_workspace("xtask-schema-missing-dir");
+        with_current_dir(&root_missing, || {
+            assert!(cmd_schema(true).is_err());
+        });
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&root_missing);
+    }
+
+    #[test]
+    fn test_cmd_schema_invalid_schema() {
+        let root = temp_workspace("xtask-schema-invalid");
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(schemas_dir.join("bad.json"), "{}").expect("write bad schema");
+
+        with_current_dir(&root, || {
+            assert!(cmd_schema(true).is_err());
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_fixtures_update_check_and_list() {
+        let root = temp_workspace("xtask-fixtures-ok");
+        fs::create_dir_all(root.join("fixtures")).expect("create fixtures dir");
+
+        with_current_dir(&root, || {
+            cmd_fixtures(false, true).expect("update fixtures");
+            cmd_fixtures(true, false).expect("check fixtures");
+            cmd_fixtures(false, false).expect("list fixtures");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_fixtures_check_detects_difference() {
+        let root = temp_workspace("xtask-fixtures-diff");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected");
+        fs::write(
+            root.join("fixtures")
+                .join("expected")
+                .join("report_uncovered.json"),
+            "{}",
+        )
+        .expect("write expected");
+
+        with_current_dir(&root, || {
+            assert!(cmd_fixtures(true, false).is_err());
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_validate_success_and_errors() {
+        let root = temp_workspace("xtask-validate-ok");
+        let schema_path = write_schemas(&root, false);
+        let report_path = root.join("report.json");
+        fs::write(&report_path, "{}").expect("write report");
+
+        with_current_dir(&root, || {
+            cmd_validate(&report_path, None).expect("validate default schema");
+            cmd_validate(&report_path, Some(&schema_path)).expect("validate explicit schema");
+        });
+
+        let missing_schema = root.join("missing.json");
+        with_current_dir(&root, || {
+            assert!(cmd_validate(&report_path, Some(&missing_schema)).is_err());
+            assert!(cmd_validate(&root.join("missing_report.json"), Some(&schema_path)).is_err());
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_validate_fallback_to_envelope() {
+        let root = temp_workspace("xtask-validate-fallback");
+        let schema_path = write_schemas(&root, true);
+        let report_path = root.join("report.json");
+        fs::write(&report_path, "{}").expect("write report");
+
+        with_current_dir(&root, || {
+            cmd_validate(&report_path, Some(&schema_path)).expect("validate with fallback");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_schema_prints_ok_when_not_check() {
+        let root = temp_workspace("xtask-schema-print");
+        write_schemas(&root, false);
+
+        with_current_dir(&root, || {
+            cmd_schema(false).expect("cmd_schema print");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_validate_schema_file_with_local_ref_ok() {
+        let root = temp_dir("xtask-schema-local-ref");
+        let schemas_dir = root.join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        let child = schemas_dir.join("child.json");
+        fs::write(
+            &child,
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
+        )
+        .expect("write child");
+        let schema_path = schemas_dir.join("schema.json");
+        fs::write(
+            &schema_path,
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","$ref":"./child.json"}"#,
+        )
+        .expect("write schema");
+
+        validate_schema_file(&schema_path, &schemas_dir).expect("validate schema");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_validate_schema_file_invalid_schema_compile_error() {
+        let root = temp_dir("xtask-schema-invalid-compile");
+        let schemas_dir = root.join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        let schema_path = schemas_dir.join("schema.json");
+        fs::write(
+            &schema_path,
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":123}"#,
+        )
+        .expect("write schema");
+
+        assert!(validate_schema_file(&schema_path, &schemas_dir).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_has_local_file_ref_array() {
+        let value = json!([{"$ref": "./foo.json"}]);
+        assert!(has_local_file_ref(&value));
+    }
+
+    #[test]
+    fn test_validate_refs_array() {
+        let root = temp_dir("xtask-refs-array");
+        let schemas_dir = root.join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(schemas_dir.join("foo.json"), "{}").expect("write foo");
+
+        let value = json!([{"$ref": "./foo.json"}]);
+        validate_refs(&value, &schemas_dir).expect("validate refs");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_validate_refs_relative_without_dot_slash() {
+        let root = temp_dir("xtask-refs-relative");
+        let schemas_dir = root.join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(schemas_dir.join("child.json"), "{}").expect("write child");
+
+        let value = json!({ "$ref": "child.json" });
+        validate_refs(&value, &schemas_dir).expect("validate refs");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_validate_refs_relative_missing_without_dot_slash_fails() {
+        let root = temp_dir("xtask-refs-relative-missing");
+        let schemas_dir = root.join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+
+        let value = json!({ "$ref": "missing.json" });
+        assert!(validate_refs(&value, &schemas_dir).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_fixtures_missing_dir_errors() {
+        let root = temp_workspace("xtask-fixtures-missing");
+        with_current_dir(&root, || {
+            assert!(cmd_fixtures(true, false).is_err());
+        });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_schema_skips_non_json_files() {
+        let root = temp_workspace("xtask-schema-non-json");
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(schemas_dir.join("note.txt"), "ignore").expect("write note");
+        fs::write(
+            schemas_dir.join("good.json"),
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
+        )
+        .expect("write schema");
+
+        with_current_dir(&root, || {
+            cmd_schema(false).expect("cmd_schema ok");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_validate_without_envelope_uses_schema() {
+        let root = temp_workspace("xtask-validate-no-envelope");
+        let schema_path = root.join("schema.json");
+        fs::write(
+            &schema_path,
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
+        )
+        .expect("write schema");
+        let report_path = root.join("report.json");
+        fs::write(&report_path, "{}").expect("write report");
+
+        with_current_dir(&root, || {
+            cmd_validate(&report_path, Some(&schema_path)).expect("validate report");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_validate_reports_errors() {
+        let root = temp_workspace("xtask-validate-errors");
+        let schema_path = root.join("schema.json");
+        fs::write(
+            &schema_path,
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["foo"]}"#,
+        )
+        .expect("write schema");
+        let report_path = root.join("report.json");
+        fs::write(&report_path, "{}").expect("write report");
+
+        with_current_dir(&root, || {
+            assert!(cmd_validate(&report_path, Some(&schema_path)).is_err());
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_conform_schema_absolute_path_ok() {
+        let root = temp_workspace("xtask-conform-abs");
+        let schema_dir = write_schemas(&root, false).parent().unwrap().to_path_buf();
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
+        write_expected_fixture(&root, "ok.json", "{}");
+
+        let schema_dir_str = schema_dir.display().to_string();
+        with_current_dir(&root, || {
+            cmd_conform(true, false, false, false, false, &schema_dir_str).expect("cmd_conform ok");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_conform_determinism_error() {
+        let root = temp_workspace("xtask-force-determinism-fail");
+        with_current_dir(&root, || {
+            assert!(cmd_conform(false, true, false, false, false, "contracts/schemas/").is_err());
+        });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_conform_survivability_error() {
+        let root = temp_workspace("xtask-force-survivability-fail");
+        with_current_dir(&root, || {
+            assert!(cmd_conform(false, false, true, false, false, "contracts/schemas/").is_err());
+        });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_conform_schema_expected_fixture_invalid_fails() {
+        let root = temp_workspace("xtask-conform-expected-invalid");
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(
+            schemas_dir.join("receipt.envelope.v1.json"),
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["foo"]}"#,
+        )
+        .expect("write envelope");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
+        write_expected_fixture(&root, "bad.json", "{}");
+
+        assert!(conform_schema(&root, &schemas_dir, false).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_conform_schema_contract_fixture_invalid_fails() {
+        let root = temp_workspace("xtask-conform-contract-invalid");
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(
+            schemas_dir.join("receipt.envelope.v1.json"),
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["foo"]}"#,
+        )
+        .expect("write envelope");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
+        write_expected_fixture(&root, "ok.json", r#"{"foo": 1}"#);
+        write_contract_fixture(&root, "bad.json", "{}");
+
+        assert!(conform_schema(&root, &schemas_dir, false).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_conform_schema_malformed_json_parses_successfully_error() {
+        let root = temp_workspace("xtask-conform-malformed");
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(
+            schemas_dir.join("receipt.envelope.v1.json"),
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
+        )
+        .expect("write envelope");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
+        write_expected_fixture(&root, "ok.json", "{}");
+        write_contract_fixture(&root, "malformed.json", "{}");
+
+        assert!(conform_schema(&root, &schemas_dir, false).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_conform_schema_skips_non_json() {
+        let root = temp_workspace("xtask-conform-nonjson");
+        let schemas_dir = root.join("contracts").join("schemas");
+        fs::create_dir_all(&schemas_dir).expect("create schemas dir");
+        fs::write(
+            schemas_dir.join("receipt.envelope.v1.json"),
+            r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}"#,
+        )
+        .expect("write envelope");
+        fs::create_dir_all(root.join("fixtures").join("expected")).expect("create expected dir");
+        write_expected_fixture(&root, "ok.json", "{}");
+        fs::write(
+            root.join("fixtures").join("expected").join("note.txt"),
+            "ignore",
+        )
+        .expect("write note");
+        let contracts_dir = root.join("contracts").join("fixtures");
+        fs::create_dir_all(&contracts_dir).expect("create contracts fixtures dir");
+        fs::write(contracts_dir.join("note.txt"), "ignore").expect("write note");
+
+        let result = conform_schema(&root, &schemas_dir, false).expect("conform schema");
+        assert!(result >= 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_lint_sensor_capabilities_missing_capabilities() {
+        let value = json!({ "schema": "sensor.report.v1", "run": {} });
+        assert!(lint_sensor_constraints(&value, "missing_caps.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_sensor_capabilities_missing_inputs() {
+        let value = json!({ "schema": "sensor.report.v1", "run": { "capabilities": {} } });
+        assert!(lint_sensor_constraints(&value, "missing_inputs.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_sensor_capabilities_invalid_reason_token() {
+        let value = json!({
+            "schema": "sensor.report.v1",
+            "run": { "capabilities": { "inputs": {
+                "diff": { "status": "available", "reason": "Bad-Reason" }
+            }}}
+        });
+        assert!(lint_sensor_constraints(&value, "bad_reason.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_sensor_capabilities_valid_inputs() {
+        let value = json!({
+            "schema": "sensor.report.v1",
+            "run": { "capabilities": { "inputs": {
+                "diff": { "status": "available", "reason": "missing_diff" }
+            }}}
+        });
+        lint_sensor_constraints(&value, "ok.json").unwrap();
+    }
+
+    #[test]
+    fn test_lint_truncation_metadata_findings_truncated_false() {
+        let value = json!({
+            "data": { "truncation": { "findings_truncated": false } },
+            "findings": [],
+            "verdict": { "reasons": [] }
+        });
+        assert!(lint_truncation_metadata(&value, "bad.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_truncation_metadata_shown_mismatch() {
+        let value = json!({
+            "data": { "truncation": { "findings_truncated": true, "shown": 2, "total": 2 } },
+            "findings": [ {} ],
+            "verdict": { "reasons": [ "truncated" ] }
+        });
+        assert!(lint_truncation_metadata(&value, "bad.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_truncation_metadata_total_too_small() {
+        let value = json!({
+            "data": { "truncation": { "findings_truncated": true, "shown": 2, "total": 1 } },
+            "findings": [ {}, {} ],
+            "verdict": { "reasons": [ "truncated" ] }
+        });
+        assert!(lint_truncation_metadata(&value, "bad.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_truncation_metadata_missing_truncated_reason() {
+        let value = json!({
+            "data": { "truncation": { "findings_truncated": true, "shown": 1, "total": 1 } },
+            "findings": [ {} ],
+            "verdict": { "reasons": [ "diff_covered" ] }
+        });
+        assert!(lint_truncation_metadata(&value, "bad.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_reason_tokens_unknown_capability_reason() {
+        let value = json!({
+            "run": { "capabilities": { "inputs": {
+                "diff": { "reason": "BAD_REASON" }
+            }}}
+        });
+        assert!(lint_reason_tokens(&value, "bad_reason.json").is_err());
+    }
+
+    #[test]
+    fn test_lint_reason_tokens_valid_inputs() {
+        let value = json!({
+            "verdict": { "reasons": [ "diff_covered" ] },
+            "run": { "capabilities": { "inputs": { "diff": { "reason": "missing_diff" } } } }
+        });
+        lint_reason_tokens(&value, "ok.json").unwrap();
+    }
+
+    #[test]
+    fn test_find_project_root_missing_workspace_fails() {
+        let root = temp_dir("xtask-no-workspace");
+        fs::create_dir_all(&root).expect("create dir");
+        fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"").expect("write Cargo.toml");
+
+        with_current_dir(&root, || {
+            assert!(find_project_root().is_err());
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_lint_functions() {
+        let non_sensor = json!({ "schema": "covguard.report.v1" });
+        lint_sensor_constraints(&non_sensor, "non_sensor.json").unwrap();
+
+        let valid_sensor = json!({
+            "schema": "sensor.report.v1",
+            "run": { "capabilities": { "inputs": {
+                "diff": { "status": "available" },
+                "coverage": { "status": "unavailable", "reason": "missing_lcov" }
+            }}}
+        });
+        lint_sensor_constraints(&valid_sensor, "sensor.json").unwrap();
+
+        let bad_sensor = json!({
+            "schema": "sensor.report.v1",
+            "run": { "capabilities": { "inputs": { "diff": { "status": "bad" } } } }
+        });
+        assert!(lint_sensor_constraints(&bad_sensor, "bad_sensor.json").is_err());
+
+        let no_trunc = json!({ "data": {} });
+        lint_truncation_metadata(&no_trunc, "no_trunc.json").unwrap();
+
+        let trunc = json!({
+            "data": { "truncation": { "findings_truncated": true, "shown": 1, "total": 2 } },
+            "findings": [ {} ],
+            "verdict": { "reasons": [ "truncated" ] }
+        });
+        lint_truncation_metadata(&trunc, "trunc.json").unwrap();
+
+        let reasons_ok = json!({
+            "verdict": { "reasons": [ "diff_covered" ] },
+            "run": { "capabilities": { "inputs": { "diff": { "reason": "missing_diff" } } } }
+        });
+        lint_reason_tokens(&reasons_ok, "ok.json").unwrap();
+
+        let reasons_bad = json!({ "verdict": { "reasons": [ "BAD_TOKEN" ] } });
+        assert!(lint_reason_tokens(&reasons_bad, "bad.json").is_err());
+    }
+
+    #[test]
+    fn test_conform_schema_and_cmd_conform() {
+        let root = temp_workspace("xtask-conform");
+        let _schema_path = write_schemas(&root, false);
+        write_expected_fixture(&root, "expected.json", "{}");
+        write_contract_fixture(&root, "malformed.json", "{invalid");
+
+        let sensor_fixture = json!({
+            "schema": "sensor.report.v1",
+            "run": { "capabilities": { "inputs": {
+                "diff": { "status": "available" },
+                "coverage": { "status": "unavailable", "reason": "missing_lcov" }
+            }}},
+            "verdict": { "reasons": [ "truncated" ] },
+            "data": { "truncation": { "findings_truncated": true, "shown": 1, "total": 2 } },
+            "findings": [ { "code": "covguard.diff.uncovered_line" } ]
+        });
+        write_contract_fixture(&root, "sensor_fixture.json", &sensor_fixture.to_string());
+
+        let schemas_dir = root.join("contracts").join("schemas");
+        let count = conform_schema(&root, &schemas_dir, false).expect("conform_schema");
+        assert!(count >= 1);
+
+        with_current_dir(&root, || {
+            cmd_conform(false, true, true, false, false, "contracts/schemas/").expect("conform");
+        });
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cmd_conform_failure_path() {
+        let root = temp_workspace("xtask-conform-fail");
+        with_current_dir(&root, || {
+            assert!(cmd_conform(true, false, false, false, false, "contracts/schemas/").is_err());
+        });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_run_cli_with_args_parse_error() {
+        let args = vec!["xtask".to_string(), "unknown".to_string()];
+        assert!(run_cli_with_args(args).is_err());
+    }
+
+    #[test]
+    fn test_run_cli_with_args_success() {
+        let root = temp_workspace("xtask-run-cli-args");
+        write_schemas(&root, false);
+        with_current_dir(&root, || {
+            let args = vec![
+                "xtask".to_string(),
+                "schema".to_string(),
+                "--check".to_string(),
+            ];
+            run_cli_with_args(args).expect("run cli with args");
+        });
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_run_cli_dispatch() {
+        let root = temp_workspace("xtask-run-cli");
+        let schema_path = write_schemas(&root, false);
+        write_expected_fixture(&root, "expected.json", "{}");
+        let report_path = root.join("report.json");
+        fs::write(&report_path, "{}").expect("write report");
+
+        with_current_dir(&root, || {
+            run_cli(Cli {
+                command: Commands::Schema { check: true },
+            })
+            .expect("run cli schema");
+            run_cli(Cli {
+                command: Commands::Fixtures {
+                    check: false,
+                    update: false,
+                },
+            })
+            .expect("run cli fixtures");
+            run_cli(Cli {
+                command: Commands::Validate {
+                    report_path: report_path.clone(),
+                    schema: Some(schema_path.clone()),
+                },
+            })
+            .expect("run cli validate");
+            run_cli(Cli {
+                command: Commands::Conform {
+                    schema: false,
+                    determinism: true,
+                    survivability: true,
+                    all: false,
+                    update: false,
+                    schema_dir: "contracts/schemas/".to_string(),
+                },
+            })
+            .expect("run cli conform");
+        });
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

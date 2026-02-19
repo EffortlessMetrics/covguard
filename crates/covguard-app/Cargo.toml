@@ -1,0 +1,35 @@
+[package]
+name = "covguard-app"
+description = "Application orchestration for diff parsing, coverage parsing, evaluation, and report output"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-app"
+keywords = ["orchestration", "coverage", "diff", "testing", "ci"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+covguard-types = { path = "../covguard-types", version = "0.2.0" }
+covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
+covguard-domain = { path = "../covguard-domain", version = "0.2.0" }
+covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.2.0" }
+covguard-adapters-coverage = { path = "../covguard-adapters-coverage", version = "0.2.0" }
+covguard-render = { path = "../covguard-render", version = "0.2.0" }
+covguard-config = { path = "../covguard-config", version = "0.2.0" }
+thiserror.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+insta = { workspace = true }
+jsonschema = "0.41.0"
+cucumber = { workspace = true }
+futures = { workspace = true }
+
+[[test]]
+name = "bdd"
+harness = false

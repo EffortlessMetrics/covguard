@@ -76,6 +76,6 @@ covguard check \
 ## Dependencies
 
 - `clap` - Argument parsing
-- `covguard-core` - Core logic
+- `covguard-app` - Orchestration logic
 - `covguard-config` - Configuration
 - `covguard-types` - DTOs

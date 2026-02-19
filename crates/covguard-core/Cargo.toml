@@ -1,30 +1,16 @@
 [package]
 name = "covguard-core"
-description = "High-level orchestration layer for covguard diff coverage analysis"
+description = "Backward-compatible facade crate that re-exports covguard-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-core"
+keywords = ["coverage", "diff", "facade", "compatibility", "testing"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
-covguard-types = { path = "../covguard-types" }
-covguard-domain = { path = "../covguard-domain" }
-covguard-adapters-diff = { path = "../covguard-adapters-diff" }
-covguard-adapters-coverage = { path = "../covguard-adapters-coverage" }
-covguard-render = { path = "../covguard-render" }
-covguard-config = { path = "../covguard-config" }
-thiserror.workspace = true
-chrono.workspace = true
-serde_json.workspace = true
-
-[dev-dependencies]
-insta = { workspace = true }
-jsonschema = "0.41.0"
-cucumber = { workspace = true }
-futures = { workspace = true }
-
-[[test]]
-name = "bdd"
-harness = false
+covguard-app = { path = "../covguard-app", version = "0.2.0" }

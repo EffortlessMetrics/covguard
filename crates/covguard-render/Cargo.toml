@@ -1,15 +1,19 @@
 [package]
 name = "covguard-render"
-description = "Output rendering (Markdown, GitHub annotations, SARIF) for covguard"
+description = "Render covguard reports as markdown, GitHub annotations, and SARIF"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-render"
+keywords = ["markdown", "sarif", "annotations", "coverage", "reporting"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
-covguard-types = { path = "../covguard-types" }
+covguard-types = { path = "../covguard-types", version = "0.2.0" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 

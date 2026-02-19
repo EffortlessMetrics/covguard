@@ -1,23 +1,27 @@
 [package]
 name = "covguard"
-description = "Diff-scoped coverage gate for pull requests"
+description = "CLI for diff-scoped coverage gating on changed lines"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "../../README.md"
+documentation = "https://docs.rs/covguard"
+keywords = ["coverage", "diff", "testing", "ci", "code-coverage"]
+categories = ["command-line-utilities", "development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
 
 [[bin]]
 name = "covguard"
 path = "src/main.rs"
 
 [dependencies]
-covguard-types = { path = "../covguard-types" }
-covguard-core = { path = "../covguard-core" }
-covguard-config = { path = "../covguard-config" }
+covguard-types = { path = "../covguard-types", version = "0.2.0" }
+covguard-app = { path = "../covguard-app", version = "0.2.0" }
+covguard-config = { path = "../covguard-config", version = "0.2.0" }
+covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.2.0" }
+covguard-adapters-repo = { path = "../covguard-adapters-repo", version = "0.2.0" }
 clap = { version = "4.5.57", features = ["derive"] }
 chrono.workspace = true
 serde_json.workspace = true

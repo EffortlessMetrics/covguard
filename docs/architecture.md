@@ -110,8 +110,10 @@ covguard-cli (entry point)
     │
     ▼
 covguard-app (orchestration)
+    ├── covguard-ports
     ├── covguard-adapters-diff
     ├── covguard-adapters-coverage
+    ├── covguard-adapters-repo
     ├── covguard-domain ──► covguard-types
     ├── covguard-render ──► covguard-types
     └── covguard-config
@@ -125,10 +127,12 @@ covguard-app (orchestration)
 | Crate | Purpose |
 |-------|---------|
 | **covguard-types** | DTOs for reports, findings, verdicts, severity. Schema IDs and error code constants. |
+| **covguard-ports** | Shared hexagonal port traits (Clock, RepoReader) used by orchestration and adapters. |
 | **covguard-domain** | Pure policy evaluation. Takes changed ranges + coverage map + policy, produces findings + verdict + metrics. No I/O. |
 | **covguard-config** | TOML configuration parsing, profile defaults (Oss/Moderate/Team/Strict), precedence resolution (CLI > file > profile > defaults). |
 | **covguard-adapters-diff** | Unified diff parsing, path normalization, range merging. Handles renames, deletions, CRLF. |
 | **covguard-adapters-coverage** | LCOV parsing, path normalization, coverage map merging (max hits). |
+| **covguard-adapters-repo** | Filesystem-backed `RepoReader` adapter for ignore directive line inspection. |
 | **covguard-render** | Renderers: Markdown (PR comments), GitHub annotations, SARIF 2.1.0. |
 | **covguard-app** | Orchestration layer. Wires adapters to domain, provides `check()` entry point, handles ignore directive detection. |
 | **covguard-cli** | Clap-based CLI. Argument parsing, config discovery, file I/O, exit code mapping. |
@@ -137,19 +141,19 @@ covguard-app (orchestration)
 ### Dependency Rules
 
 - **covguard-types**: No internal dependencies (leaf crate)
+- **covguard-ports**: Depends only on common primitives (chrono)
 - **covguard-domain**: Depends only on covguard-types
 - **covguard-config**: Depends on covguard-types (for Scope enum)
 - **covguard-adapters-***: Standalone parsers, no internal dependencies
+- **covguard-adapters-repo**: Depends on covguard-ports
 - **covguard-render**: Depends on covguard-types
 - **covguard-app**: Depends on all crates except CLI
 - **covguard-cli**: Depends on app + config + types
 
-### Port Traits (in covguard-app)
-
-Port traits live in covguard-app rather than a separate crate:
+### Port Traits (in covguard-ports)
 
 - **Clock**: `fn now() -> DateTime` — Injected for deterministic tests
-- **RepoReader**: `fn read_lines(path, lines) -> HashMap<u32, String>` — For ignore directive detection
+- **RepoReader**: `fn read_line(path, line_no) -> Option<String>` — For ignore directive detection
 
 ## Schema management
 Ship schemas in-repo:

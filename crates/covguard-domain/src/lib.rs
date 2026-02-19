@@ -243,12 +243,12 @@ pub fn evaluate(input: EvalInput) -> EvalOutput {
     }
 
     // Missing file findings (file-level)
-    if input.policy.missing_file != MissingBehavior::Skip {
-        let severity = match input.policy.missing_file {
-            MissingBehavior::Warn => Severity::Warn,
-            MissingBehavior::Fail => Severity::Error,
-            MissingBehavior::Skip => Severity::Info,
-        };
+    let missing_file_severity = match input.policy.missing_file {
+        MissingBehavior::Skip => None,
+        MissingBehavior::Warn => Some(Severity::Warn),
+        MissingBehavior::Fail => Some(Severity::Error),
+    };
+    if let Some(severity) = missing_file_severity {
         for (path, count) in &missing_files {
             let fp = compute_fingerprint(&[CODE_MISSING_COVERAGE_FOR_FILE, path]);
             findings.push(Finding {
@@ -500,6 +500,12 @@ mod tests {
     }
 
     #[test]
+    fn test_scope_as_str() {
+        assert_eq!(Scope::Added.as_str(), "added");
+        assert_eq!(Scope::Touched.as_str(), "touched");
+    }
+
+    #[test]
     fn test_all_lines_covered_pass() {
         let input = make_input(
             vec![("src/lib.rs", vec![1..=3])],
@@ -514,8 +520,7 @@ mod tests {
             !output
                 .findings
                 .iter()
-                .any(|f| f.code == CODE_UNCOVERED_LINE),
-            "Should have no uncovered line findings"
+                .any(|f| f.code == CODE_UNCOVERED_LINE)
         );
         assert_eq!(output.metrics.covered_lines, 3);
         assert_eq!(output.metrics.uncovered_lines, 0);
@@ -599,6 +604,37 @@ mod tests {
                 .iter()
                 .any(|f| f.code == CODE_MISSING_COVERAGE_FOR_FILE)
         );
+    }
+
+    #[test]
+    fn test_missing_line_within_file_counts_as_missing() {
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=2])],
+            vec![("src/lib.rs", vec![(1, 1)])],
+        );
+        input.policy.missing_coverage = MissingBehavior::Warn;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.metrics.covered_lines, 1);
+        assert_eq!(output.metrics.uncovered_lines, 0);
+        assert_eq!(output.metrics.missing_lines, 1);
+        assert_eq!(output.metrics.diff_coverage_pct, 50.0);
+    }
+
+    #[test]
+    fn test_missing_file_fail_severity_error() {
+        let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
+        input.policy.missing_file = MissingBehavior::Fail;
+
+        let output = evaluate(input);
+
+        let missing = output
+            .findings
+            .iter()
+            .find(|f| f.code == CODE_MISSING_COVERAGE_FOR_FILE)
+            .expect("missing file finding");
+        assert_eq!(missing.severity, Severity::Error);
     }
 
     #[test]
@@ -736,6 +772,59 @@ mod tests {
     }
 
     #[test]
+    fn test_sort_findings_tiebreakers() {
+        fn make_finding(
+            path: &str,
+            line: u32,
+            check_id: &str,
+            code: &str,
+            message: &str,
+        ) -> Finding {
+            Finding {
+                severity: Severity::Error,
+                check_id: check_id.to_string(),
+                code: code.to_string(),
+                message: message.to_string(),
+                location: Some(Location {
+                    path: path.to_string(),
+                    line: Some(line),
+                    col: None,
+                }),
+                data: None,
+                fingerprint: None,
+            }
+        }
+
+        let mut by_line = vec![
+            make_finding("src/lib.rs", 2, "a", "code.a", "m1"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "m1"),
+        ];
+        sort_findings(&mut by_line);
+        assert_eq!(by_line[0].location.as_ref().unwrap().line, Some(1));
+
+        let mut by_check = vec![
+            make_finding("src/lib.rs", 1, "b", "code.a", "m1"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "m1"),
+        ];
+        sort_findings(&mut by_check);
+        assert_eq!(by_check[0].check_id, "a");
+
+        let mut by_code = vec![
+            make_finding("src/lib.rs", 1, "a", "code.b", "m1"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "m1"),
+        ];
+        sort_findings(&mut by_code);
+        assert_eq!(by_code[0].code, "code.a");
+
+        let mut by_message = vec![
+            make_finding("src/lib.rs", 1, "a", "code.a", "b"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "a"),
+        ];
+        sort_findings(&mut by_message);
+        assert_eq!(by_message[0].message, "a");
+    }
+
+    #[test]
     fn test_fail_on_never() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=1])],
@@ -746,6 +835,39 @@ mod tests {
         let output = evaluate(input);
 
         // Even with errors, verdict should be warn (not fail)
+        assert_eq!(output.verdict, VerdictStatus::Warn);
+    }
+
+    #[test]
+    fn test_fail_on_never_passes_without_findings() {
+        let mut input = make_input(vec![], vec![]);
+        input.policy.fail_on = FailOn::Never;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.verdict, VerdictStatus::Pass);
+    }
+
+    #[test]
+    fn test_fail_on_warn_fails_on_warnings() {
+        let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
+        input.policy.fail_on = FailOn::Warn;
+        input.policy.missing_file = MissingBehavior::Warn;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.verdict, VerdictStatus::Fail);
+    }
+
+    #[test]
+    fn test_fail_on_error_warns_on_only_warnings() {
+        let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
+        input.policy.fail_on = FailOn::Error;
+        input.policy.missing_file = MissingBehavior::Warn;
+        input.policy.threshold_pct = 0.0;
+
+        let output = evaluate(input);
+
         assert_eq!(output.verdict, VerdictStatus::Warn);
     }
 
@@ -861,6 +983,8 @@ mod tests {
     fn test_has_ignore_directive_hyphen_syntax() {
         assert!(has_ignore_directive("// covguard-ignore"));
         assert!(has_ignore_directive("# covguard-ignore"));
+        assert!(has_ignore_directive("-- covguard-ignore"));
+        assert!(has_ignore_directive("/* covguard-ignore */"));
     }
 
     #[test]

@@ -1,15 +1,20 @@
 [package]
 name = "covguard-adapters-coverage"
-description = "LCOV coverage file parsing adapter for covguard"
+description = "LCOV parsing and coverage-map merge adapter for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-adapters-coverage"
+keywords = ["lcov", "coverage", "parser", "testing", "ci"]
+categories = ["parser-implementations", "development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
 
 [dev-dependencies]
 proptest = "1.10.0"

@@ -1,0 +1,4 @@
+repository:
+  description: "Diff-scoped coverage gate for pull requests that checks whether added/changed lines are covered by tests."
+  homepage: "https://github.com/effortlessmetrics/cov-guard"
+  topics: rust, diff, coverage, testing, ci, code-coverage

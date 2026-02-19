@@ -75,7 +75,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run BDD tests
-        run: cargo test --package covguard-core --test bdd
+        run: cargo test --package covguard-app --test bdd
 
   # Property tests (proptest) - run with more iterations in CI
   property-tests:
@@ -228,3 +228,31 @@ jobs:
 
       - name: Run security audit
         run: cargo audit
+
+  # Test Coverage
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Run coverage
+        run: |
+          cargo +nightly llvm-cov --workspace --all-features --tests --branch \
+            --ignore-filename-regex "(tests/|bdd/|fuzz/|xtask/)" \
+            --fail-under-lines 100 \
+            --summary-only --output-path coverage.txt
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.txt

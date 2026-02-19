@@ -1,12 +1,16 @@
 [package]
 name = "covguard-types"
-description = "Core types and DTOs for covguard diff coverage analysis"
+description = "Shared report DTOs, codes, and schema constants for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-types"
+keywords = ["coverage", "diff", "schema", "dto", "serde"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 serde.workspace = true

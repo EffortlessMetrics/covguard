@@ -140,25 +140,27 @@ pub fn render_markdown(report: &Report, max_lines: usize) -> String {
         let shown = total_findings.min(max_lines);
 
         for finding in uncovered_findings.iter().take(max_lines) {
-            if let Some(location) = &finding.location {
-                let line_str = location
-                    .line
-                    .map(|l| l.to_string())
-                    .unwrap_or_else(|| "-".to_string());
+            let location = finding
+                .location
+                .as_ref()
+                .expect("filtered to only findings with locations");
+            let line_str = location
+                .line
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| "-".to_string());
 
-                // Extract hits from finding data
-                let hits = finding
-                    .data
-                    .as_ref()
-                    .and_then(|d| d.get("hits"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0);
+            // Extract hits from finding data
+            let hits = finding
+                .data
+                .as_ref()
+                .and_then(|d| d.get("hits"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
 
-                output.push_str(&format!(
-                    "| {} | {} | {} |\n",
-                    location.path, line_str, hits
-                ));
-            }
+            output.push_str(&format!(
+                "| {} | {} | {} |\n",
+                location.path, line_str, hits
+            ));
         }
 
         if total_findings > max_lines {
@@ -743,12 +745,7 @@ mod tests {
         ];
 
         for section in expected_sections {
-            assert!(
-                md.contains(section),
-                "Missing section: {}\nActual output:\n{}",
-                section,
-                md
-            );
+            assert!(md.contains(section));
         }
     }
 
@@ -1349,29 +1346,36 @@ mod tests {
 
     #[test]
     fn test_annotations_format_github_valid() {
-        let findings = vec![Finding::uncovered_line("src/lib.rs", 42, 0)];
-        let report = make_test_report(VerdictStatus::Fail, findings, 0, 1);
-        let annotations = render_annotations(&report, 25);
+        let mut error_finding = Finding::uncovered_line("src/lib.rs", 42, 0);
+        error_finding.severity = Severity::Error;
+        let mut warn_finding = Finding::uncovered_line("src/lib.rs", 42, 0);
+        warn_finding.severity = Severity::Warn;
+        let mut info_finding = Finding::uncovered_line("src/lib.rs", 42, 0);
+        info_finding.severity = Severity::Info;
 
-        // GitHub annotation format: ::level file=path,line=num::message
-        let line = annotations.lines().next().unwrap();
+        for finding in [error_finding, warn_finding, info_finding] {
+            let report = make_test_report(VerdictStatus::Fail, vec![finding], 0, 1);
+            let annotations = render_annotations(&report, 25);
 
-        // Must start with ::
-        assert!(line.starts_with("::"));
+            // GitHub annotation format: ::level file=path,line=num::message
+            let line = annotations.lines().next().unwrap();
 
-        // Must have level (error, warning, notice)
-        assert!(
-            line.starts_with("::error ")
+            // Must start with ::
+            assert!(line.starts_with("::"));
+
+            // Must have level (error, warning, notice)
+            let has_valid_prefix = line.starts_with("::error ")
                 || line.starts_with("::warning ")
-                || line.starts_with("::notice ")
-        );
+                || line.starts_with("::notice ");
+            assert!(has_valid_prefix);
 
-        // Must have file= parameter
-        assert!(line.contains("file="));
+            // Must have file= parameter
+            assert!(line.contains("file="));
 
-        // Must have double colon before message
-        let parts: Vec<_> = line.split("::").collect();
-        assert!(parts.len() >= 3);
+            // Must have double colon before message
+            let parts: Vec<_> = line.split("::").collect();
+            assert!(parts.len() >= 3);
+        }
     }
 
     #[test]
@@ -1422,11 +1426,7 @@ mod tests {
         let annotations = render_annotations(&report, 25);
 
         for line in annotations.lines() {
-            assert!(
-                !line.ends_with(' '),
-                "Line should not end with whitespace: {:?}",
-                line
-            );
+            assert!(!line.ends_with(' '));
         }
     }
 
@@ -1546,13 +1546,15 @@ mod tests {
 
         let results = parsed["runs"][0]["results"].as_array().unwrap();
         for result in results {
-            if let Some(locations) = result["locations"].as_array() {
-                for loc in locations {
-                    if let Some(region) = loc["physicalLocation"].get("region") {
-                        let start_line = region["startLine"].as_u64().unwrap();
-                        assert!(start_line > 0, "startLine must be positive");
-                    }
-                }
+            let locations = result["locations"]
+                .as_array()
+                .expect("locations should be an array");
+            for loc in locations {
+                let region = loc["physicalLocation"]
+                    .get("region")
+                    .expect("region should be present");
+                let start_line = region["startLine"].as_u64().unwrap();
+                assert!(start_line > 0);
             }
         }
     }
@@ -1582,11 +1584,7 @@ mod tests {
 
         for result in results {
             let level = result["level"].as_str().unwrap();
-            assert!(
-                valid_levels.contains(&level),
-                "Invalid SARIF level: {}",
-                level
-            );
+            assert!(valid_levels.contains(&level));
         }
     }
 

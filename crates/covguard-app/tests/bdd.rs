@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use covguard_core::{CheckRequest, FailOn, check};
+use covguard_app::{CheckRequest, FailOn, MissingBehavior, check};
 use covguard_types::{CODE_UNCOVERED_LINE, Scope, Severity, VerdictStatus};
 use cucumber::{World, given, then, when};
 
@@ -19,8 +19,8 @@ use cucumber::{World, given, then, when};
 pub struct CovguardWorld {
     /// The diff text (patch format).
     diff_text: String,
-    /// The LCOV coverage text.
-    lcov_text: String,
+    /// The LCOV coverage text inputs.
+    lcov_texts: Vec<String>,
     /// The scope of lines to evaluate.
     scope: Scope,
     /// The coverage threshold percentage.
@@ -34,7 +34,7 @@ pub struct CovguardWorld {
     /// Pre-computed ignored lines for testing.
     ignored_lines: BTreeMap<String, BTreeSet<u32>>,
     /// The result of running check().
-    result: Option<covguard_core::CheckResult>,
+    result: Option<covguard_app::CheckResult>,
     /// Whether an error occurred during check.
     check_error: Option<String>,
     /// The file path used in the current scenario.
@@ -43,8 +43,24 @@ pub struct CovguardWorld {
     ignore_line: u32,
     /// Additional files used in multi-file scenarios.
     additional_files: Vec<String>,
+    /// Include glob patterns.
+    include_patterns: Vec<String>,
+    /// Exclude glob patterns.
+    exclude_patterns: Vec<String>,
+    /// LCOV path-strip prefixes.
+    path_strip: Vec<String>,
+    /// Missing-line coverage behavior.
+    missing_coverage: MissingBehavior,
+    /// Missing-file coverage behavior.
+    missing_file: MissingBehavior,
+    /// Optional max findings cap.
+    max_findings: Option<usize>,
     /// Whether to expect an error from the check.
     expect_error: bool,
+}
+
+fn set_single_lcov(world: &mut CovguardWorld, text: String) {
+    world.lcov_texts = vec![text];
 }
 
 // ============================================================================
@@ -56,6 +72,17 @@ pub struct CovguardWorld {
 fn given_ignore_directives_disabled(world: &mut CovguardWorld) {
     world.ignore_directives = false;
     world.ignored_lines.clear();
+    world.scope = Scope::Added;
+    world.threshold_pct = 80.0;
+    world.max_uncovered_lines = None;
+    world.fail_on = FailOn::Error;
+    world.include_patterns.clear();
+    world.exclude_patterns.clear();
+    world.path_strip.clear();
+    world.missing_coverage = MissingBehavior::Warn;
+    world.missing_file = MissingBehavior::Warn;
+    world.max_findings = None;
+    world.expect_error = false;
 }
 
 /// Background step: enable ignore directives.
@@ -420,15 +447,18 @@ index 0000000..1111111
 #[given("an LCOV report where those lines have 0 hits")]
 fn given_lcov_uncovered(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -436,15 +466,18 @@ end_of_record
 #[given("an LCOV report where all lines are covered")]
 fn given_lcov_all_covered(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,5
 DA:2,5
 DA:3,5
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -457,14 +490,17 @@ fn given_lcov_any_values(world: &mut CovguardWorld) {
         &world.current_file
     };
     // Provide some coverage data
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,1
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -473,15 +509,18 @@ end_of_record
 fn given_lcov_ignore_line_uncovered(world: &mut CovguardWorld) {
     let file = &world.current_file;
     // All lines including the ignored one have 0 hits
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -489,15 +528,18 @@ end_of_record
 #[given("an LCOV report where modified lines have 0 hits")]
 fn given_lcov_modified_uncovered(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,0
 DA:3,1
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -505,15 +547,18 @@ end_of_record
 #[given("an LCOV report where line 2 is covered but lines 1 and 3 are not")]
 fn given_lcov_partial_middle_covered(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,5
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -530,15 +575,28 @@ fn given_lcov_with_percent_coverage(world: &mut CovguardWorld, percent: i32) {
         lcov.push_str(&format!("DA:{},{}\n", i, hits));
     }
     lcov.push_str("end_of_record\n");
-    world.lcov_text = lcov;
+    set_single_lcov(world, lcov);
+}
+
+#[given(expr = "an LCOV report with {int} uncovered lines")]
+fn given_lcov_with_n_uncovered_lines(world: &mut CovguardWorld, num_lines: i32) {
+    let file = &world.current_file;
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=num_lines {
+        lcov.push_str(&format!("DA:{},0\n", i));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
 }
 
 /// And an LCOV report where 3 lines are covered and 2 are not.
 #[given("an LCOV report where 3 lines are covered and 2 are not")]
 fn given_lcov_3_covered_2_not(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,1
@@ -547,7 +605,8 @@ DA:4,0
 DA:5,0
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
@@ -555,14 +614,17 @@ end_of_record
 #[given(expr = "an LCOV report where line {int} has 0 hits")]
 fn given_lcov_specific_line_uncovered(world: &mut CovguardWorld, line_num: i32) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:{line},0
 end_of_record
 "#,
-        file = file,
-        line = line_num
+            file = file,
+            line = line_num
+        ),
     );
 }
 
@@ -585,7 +647,7 @@ fn given_lcov_all_added_uncovered(world: &mut CovguardWorld) {
         lcov.push_str("end_of_record\n");
     }
 
-    world.lcov_text = lcov;
+    set_single_lcov(world, lcov);
 }
 
 /// And an LCOV report where "src/a.rs" is covered and "src/b.rs" is not.
@@ -595,8 +657,10 @@ fn given_lcov_mixed_coverage(
     covered_file: String,
     uncovered_file: String,
 ) {
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{covered}
 DA:1,5
 DA:2,5
@@ -606,43 +670,49 @@ DA:1,0
 DA:2,0
 end_of_record
 "#,
-        covered = covered_file,
-        uncovered = uncovered_file
+            covered = covered_file,
+            uncovered = uncovered_file
+        ),
     );
 }
 
 /// And an LCOV report that only covers a specific file.
 #[given(expr = "an LCOV report that only covers {string}")]
 fn given_lcov_only_covers_one_file(world: &mut CovguardWorld, file_path: String) {
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,5
 DA:2,5
 end_of_record
 "#,
-        file = file_path
+            file = file_path
+        ),
     );
 }
 
 /// And an empty LCOV report.
 #[given("an empty LCOV report")]
 fn given_empty_lcov(world: &mut CovguardWorld) {
-    world.lcov_text = String::new();
+    world.lcov_texts = vec![String::new()];
 }
 
 /// And an invalid LCOV text.
 #[given(expr = "an invalid LCOV text {string}")]
 fn given_invalid_lcov(world: &mut CovguardWorld, text: String) {
-    world.lcov_text = text;
+    set_single_lcov(world, text);
 }
 
 /// And an LCOV report with explicit zero hits.
 #[given("an LCOV report with explicit zero hits")]
 fn given_lcov_explicit_zero(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
@@ -651,15 +721,18 @@ LH:0
 LF:3
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
     );
 }
 
 /// And an LCOV report for a specific file with 0 hits.
 #[given(expr = "an LCOV report for {string} with 0 hits")]
 fn given_lcov_for_file_uncovered(world: &mut CovguardWorld, file_path: String) {
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
@@ -667,22 +740,26 @@ DA:3,0
 DA:4,0
 end_of_record
 "#,
-        file = file_path
+            file = file_path
+        ),
     );
 }
 
 /// And an LCOV report for normalized path.
 #[given(expr = "an LCOV report for normalized path {string} with 0 hits")]
 fn given_lcov_for_normalized_path(world: &mut CovguardWorld, file_path: String) {
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file_path
+            file = file_path
+        ),
     );
 }
 
@@ -695,8 +772,10 @@ fn given_lcov_both_files_covered(world: &mut CovguardWorld) {
         .first()
         .map(|s| s.as_str())
         .unwrap_or("src/other.rs");
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{f1}
 DA:1,5
 DA:2,5
@@ -706,8 +785,9 @@ DA:1,5
 DA:2,5
 end_of_record
 "#,
-        f1 = file1,
-        f2 = file2
+            f1 = file1,
+            f2 = file2
+        ),
     );
 }
 
@@ -715,16 +795,19 @@ end_of_record
 #[given(expr = "an LCOV report where all lines have {int} hits")]
 fn given_lcov_all_lines_hits(world: &mut CovguardWorld, hits: i32) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,{hits}
 DA:2,{hits}
 DA:3,{hits}
 end_of_record
 "#,
-        file = file,
-        hits = hits
+            file = file,
+            hits = hits
+        ),
     );
 }
 
@@ -732,15 +815,52 @@ end_of_record
 #[given("an LCOV report where 1 line is covered and 2 are not")]
 fn given_lcov_one_of_three_covered(world: &mut CovguardWorld) {
     let file = &world.current_file;
-    world.lcov_text = format!(
-        r#"TN:
+    set_single_lcov(
+        world,
+        format!(
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
+        ),
+    );
+}
+
+#[given("multiple LCOV inputs are merged by max hits")]
+fn given_multiple_lcov_inputs(world: &mut CovguardWorld) {
+    let file = &world.current_file;
+    world.lcov_texts = vec![
+        format!(
+            "TN:\nSF:{file}\nDA:1,0\nDA:2,0\nDA:3,0\nend_of_record\n",
+            file = file
+        ),
+        format!(
+            "TN:\nSF:{file}\nDA:1,5\nDA:2,0\nDA:3,0\nend_of_record\n",
+            file = file
+        ),
+    ];
+}
+
+#[given(
+    expr = "an LCOV report with absolute SF paths under {string} where those lines have 0 hits"
+)]
+fn given_lcov_absolute_paths(world: &mut CovguardWorld, prefix: String) {
+    let file = &world.current_file;
+    let absolute = format!(
+        "{}{}",
+        prefix.trim_end_matches('/'),
+        format!("/{}", file).replace('\\', "/")
+    );
+    set_single_lcov(
+        world,
+        format!(
+            "TN:\nSF:{absolute}\nDA:1,0\nDA:2,0\nDA:3,0\nend_of_record\n",
+            absolute = absolute
+        ),
     );
 }
 
@@ -754,6 +874,36 @@ fn given_threshold(world: &mut CovguardWorld, threshold: i32) {
     world.threshold_pct = threshold as f64;
 }
 
+#[given(expr = "a path strip prefix {string}")]
+fn given_path_strip_prefix(world: &mut CovguardWorld, prefix: String) {
+    world.path_strip = vec![prefix];
+}
+
+#[given(expr = "exclude patterns are {string}")]
+fn given_exclude_patterns(world: &mut CovguardWorld, patterns: String) {
+    world.exclude_patterns = patterns
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .collect();
+}
+
+#[given(expr = "include patterns are {string}")]
+fn given_include_patterns(world: &mut CovguardWorld, patterns: String) {
+    world.include_patterns = patterns
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .collect();
+}
+
+#[given(expr = "max findings is {int}")]
+fn given_max_findings(world: &mut CovguardWorld, max: i32) {
+    world.max_findings = Some(max as usize);
+}
+
 // ============================================================================
 // When Steps
 // ============================================================================
@@ -764,18 +914,51 @@ fn when_check_with_profile(world: &mut CovguardWorld, profile: String) {
     match profile.as_str() {
         "strict" => {
             world.fail_on = FailOn::Error;
-            world.threshold_pct = 100.0; // Strict requires 100% coverage
+            world.threshold_pct = 90.0;
+            world.scope = Scope::Touched;
             world.max_uncovered_lines = Some(5);
+            world.missing_coverage = MissingBehavior::Fail;
+            world.missing_file = MissingBehavior::Fail;
+        }
+        "oss" => {
+            world.fail_on = FailOn::Never;
+            world.threshold_pct = 70.0;
+            world.scope = Scope::Added;
+            world.max_uncovered_lines = None;
+            world.missing_coverage = MissingBehavior::Skip;
+            world.missing_file = MissingBehavior::Skip;
+        }
+        "moderate" => {
+            world.fail_on = FailOn::Error;
+            world.threshold_pct = 75.0;
+            world.scope = Scope::Added;
+            world.max_uncovered_lines = None;
+            world.missing_coverage = MissingBehavior::Warn;
+            world.missing_file = MissingBehavior::Skip;
+        }
+        "team" => {
+            world.fail_on = FailOn::Error;
+            world.threshold_pct = 80.0;
+            world.scope = Scope::Added;
+            world.max_uncovered_lines = None;
+            world.missing_coverage = MissingBehavior::Warn;
+            world.missing_file = MissingBehavior::Warn;
         }
         "lenient" => {
             world.fail_on = FailOn::Never;
             world.threshold_pct = 0.0;
+            world.scope = Scope::Added;
             world.max_uncovered_lines = None;
+            world.missing_coverage = MissingBehavior::Warn;
+            world.missing_file = MissingBehavior::Warn;
         }
         _ => {
             world.fail_on = FailOn::Error;
             world.threshold_pct = 80.0;
+            world.scope = Scope::Added;
             world.max_uncovered_lines = None;
+            world.missing_coverage = MissingBehavior::Warn;
+            world.missing_file = MissingBehavior::Warn;
         }
     }
 
@@ -791,6 +974,8 @@ fn when_check_with_scope(world: &mut CovguardWorld, scope: String) {
         _ => Scope::Added,
     };
     world.max_uncovered_lines = None;
+    world.missing_coverage = MissingBehavior::Warn;
+    world.missing_file = MissingBehavior::Warn;
     if world.threshold_pct == 0.0 {
         world.threshold_pct = 80.0;
     }
@@ -811,6 +996,8 @@ fn when_check_with_fail_on(world: &mut CovguardWorld, fail_on: String) {
         _ => FailOn::Error,
     };
     world.max_uncovered_lines = None;
+    world.missing_coverage = MissingBehavior::Warn;
+    world.missing_file = MissingBehavior::Warn;
     if world.threshold_pct == 0.0 {
         world.threshold_pct = 100.0;
     }
@@ -832,6 +1019,8 @@ fn when_check_default(world: &mut CovguardWorld) {
         world.threshold_pct = 80.0;
     }
     world.scope = Scope::Added;
+    world.missing_coverage = MissingBehavior::Warn;
+    world.missing_file = MissingBehavior::Warn;
 
     run_check(world);
 }
@@ -844,6 +1033,8 @@ fn when_check_expecting_error(world: &mut CovguardWorld) {
     world.threshold_pct = 80.0;
     world.scope = Scope::Added;
     world.max_uncovered_lines = None;
+    world.missing_coverage = MissingBehavior::Warn;
+    world.missing_file = MissingBehavior::Warn;
 
     run_check_with_error_handling(world);
 }
@@ -860,13 +1051,21 @@ fn run_check_with_error_handling(world: &mut CovguardWorld) {
         diff_file_path: Some("test.patch".to_string()),
         base_ref: None,
         head_ref: None,
-        lcov_texts: vec![world.lcov_text.clone()],
-        lcov_paths: vec!["coverage.info".to_string()],
+        lcov_texts: world.lcov_texts.clone(),
+        lcov_paths: (0..world.lcov_texts.len())
+            .map(|idx| format!("coverage-{}.info", idx + 1))
+            .collect(),
         max_uncovered_lines: world.max_uncovered_lines,
+        missing_coverage: world.missing_coverage,
+        missing_file: world.missing_file,
+        include_patterns: world.include_patterns.clone(),
+        exclude_patterns: world.exclude_patterns.clone(),
+        path_strip: world.path_strip.clone(),
         threshold_pct: world.threshold_pct,
         scope: world.scope,
         fail_on: world.fail_on,
         ignore_directives: world.ignore_directives,
+        max_findings: world.max_findings,
         ignored_lines: if world.ignored_lines.is_empty() {
             None
         } else {
@@ -906,6 +1105,22 @@ fn then_verdict_is(world: &mut CovguardWorld, expected_status: String) {
         actual_status, expected_status,
         "Expected verdict '{}' but got '{}'",
         expected_status, actual_status
+    );
+}
+
+#[then(expr = "the verdict reasons include {string}")]
+fn then_verdict_reasons_include(world: &mut CovguardWorld, expected_reason: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result
+            .report
+            .verdict
+            .reasons
+            .iter()
+            .any(|reason| reason == &expected_reason),
+        "Expected verdict reasons to include '{}', but got {:?}",
+        expected_reason,
+        result.report.verdict.reasons
     );
 }
 
@@ -1183,6 +1398,89 @@ fn then_ignored_lines_count_is(world: &mut CovguardWorld, expected: i32) {
     );
 }
 
+#[then(expr = "excluded_files_count is {int}")]
+fn then_excluded_files_count_is(world: &mut CovguardWorld, expected: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let actual = result.report.data.excluded_files_count as i32;
+    assert_eq!(
+        actual, expected,
+        "Expected excluded_files_count {} but got {}",
+        expected, actual
+    );
+}
+
+#[then(expr = "truncation is present with shown {int}")]
+fn then_truncation_shown(world: &mut CovguardWorld, shown: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let trunc = result
+        .report
+        .data
+        .truncation
+        .as_ref()
+        .expect("expected truncation metadata");
+    assert_eq!(trunc.shown as i32, shown);
+    assert!(trunc.findings_truncated);
+}
+
+#[then("truncation total is greater than shown")]
+fn then_truncation_total_gt_shown(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let trunc = result
+        .report
+        .data
+        .truncation
+        .as_ref()
+        .expect("expected truncation metadata");
+    assert!(
+        trunc.total > trunc.shown,
+        "Expected truncation.total ({}) > truncation.shown ({})",
+        trunc.total,
+        trunc.shown
+    );
+}
+
+#[then(expr = "debug binary_files_count is {int}")]
+fn then_debug_binary_files_count(world: &mut CovguardWorld, expected: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let debug = result
+        .report
+        .data
+        .debug
+        .as_ref()
+        .expect("expected debug metadata");
+    let actual = debug["binary_files_count"]
+        .as_u64()
+        .expect("binary_files_count should be a number") as i32;
+    assert_eq!(
+        actual, expected,
+        "Expected debug.binary_files_count {} but got {}",
+        expected, actual
+    );
+}
+
+#[then(expr = "debug includes binary file {string}")]
+fn then_debug_includes_binary_file(world: &mut CovguardWorld, expected_file: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let debug = result
+        .report
+        .data
+        .debug
+        .as_ref()
+        .expect("expected debug metadata");
+    let files = debug["binary_files"]
+        .as_array()
+        .expect("binary_files should be an array");
+    let has_file = files
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .any(|path| path == expected_file);
+    assert!(
+        has_file,
+        "Expected debug.binary_files to include '{}', got {:?}",
+        expected_file, files
+    );
+}
+
 // ============================================================================
 // Then Steps - Error Handling
 // ============================================================================
@@ -1214,7 +1512,7 @@ fn then_check_succeeds(world: &mut CovguardWorld) {
 #[then(expr = "the markdown output contains {string}")]
 fn then_markdown_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let markdown = covguard_core::render_markdown(&result.report);
+    let markdown = covguard_app::render_markdown(&result.report);
 
     assert!(
         markdown.to_lowercase().contains(&expected.to_lowercase()),
@@ -1228,7 +1526,7 @@ fn then_markdown_contains(world: &mut CovguardWorld, expected: String) {
 #[then("the SARIF output is valid JSON")]
 fn then_sarif_is_valid_json(world: &mut CovguardWorld) {
     let result = world.result.as_ref().expect("check should have been run");
-    let sarif = covguard_core::render_sarif(&result.report);
+    let sarif = covguard_app::render_sarif(&result.report);
 
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&sarif);
     assert!(
@@ -1242,7 +1540,7 @@ fn then_sarif_is_valid_json(world: &mut CovguardWorld) {
 #[then(expr = "the SARIF output contains {string}")]
 fn then_sarif_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let sarif = covguard_core::render_sarif(&result.report);
+    let sarif = covguard_app::render_sarif(&result.report);
 
     assert!(
         sarif.contains(&expected),
@@ -1256,7 +1554,7 @@ fn then_sarif_contains(world: &mut CovguardWorld, expected: String) {
 #[then(expr = "the annotations output contains {string}")]
 fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let annotations = covguard_core::render_annotations(&result.report);
+    let annotations = covguard_app::render_annotations(&result.report);
 
     assert!(
         annotations.contains(&expected),
@@ -1264,6 +1562,24 @@ fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
         expected,
         annotations
     );
+}
+
+#[then(expr = "annotations rendered with limit {int} contain at most {int} entries")]
+fn then_annotations_with_limit_count(world: &mut CovguardWorld, limit: i32, max_count: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let annotations = covguard_app::render_annotations_with_limit(&result.report, limit as usize);
+    let actual = annotations
+        .lines()
+        .filter(|line| line.starts_with("::"))
+        .count() as i32;
+    assert!(
+        actual <= max_count,
+        "Expected at most {} annotations with limit {}, got {}",
+        max_count,
+        limit,
+        actual
+    );
+    assert!(actual > 0, "Expected at least one annotation");
 }
 
 /// Then the report scope is a specific value.
@@ -1286,6 +1602,25 @@ fn then_report_has_tool_info(world: &mut CovguardWorld) {
     assert_eq!(result.report.tool.name, "covguard");
     assert!(!result.report.tool.version.is_empty());
     assert!(!result.report.run.started_at.is_empty());
+}
+
+#[then("re-running the same check yields identical report JSON")]
+fn then_rerun_is_deterministic(world: &mut CovguardWorld) {
+    let first = world.result.as_ref().expect("check should have been run");
+    let first_value =
+        serde_json::to_value(&first.report).expect("first report should serialize to JSON");
+
+    run_check(world);
+
+    let second = world.result.as_ref().expect("second check should have run");
+    let second_value =
+        serde_json::to_value(&second.report).expect("second report should serialize to JSON");
+
+    assert_eq!(first_value["schema"], second_value["schema"]);
+    assert_eq!(first_value["tool"], second_value["tool"]);
+    assert_eq!(first_value["verdict"], second_value["verdict"]);
+    assert_eq!(first_value["data"], second_value["data"]);
+    assert_eq!(first_value["findings"], second_value["findings"]);
 }
 
 // ============================================================================
