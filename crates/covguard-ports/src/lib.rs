@@ -25,7 +25,12 @@ pub trait DiffProvider {
     fn parse_patch(&self, text: &str) -> Result<DiffParseResult, String>;
 
     /// Load a unified diff between two refs from a repository path.
-    fn load_diff_from_git(&self, base: &str, head: &str, repo_root: &Path) -> Result<String, String>;
+    fn load_diff_from_git(
+        &self,
+        base: &str,
+        head: &str,
+        repo_root: &Path,
+    ) -> Result<String, String>;
 }
 
 /// Port for loading and merging LCOV coverage data.

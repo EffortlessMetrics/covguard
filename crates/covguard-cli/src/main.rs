@@ -481,15 +481,14 @@ where
                 (content, Some(path.clone()), None, None)
             }
             (None, Some(base_ref), Some(head_ref)) => {
-                let content = load_diff_from_git(base_ref, head_ref, &repo_root).map_err(|e| {
-                    match e {
+                let content =
+                    load_diff_from_git(base_ref, head_ref, &repo_root).map_err(|e| match e {
                         DiffError::IoError(msg) => CliError::FileRead {
                             path: format!("git diff {}..{}", base_ref, head_ref),
                             source: std::io::Error::other(msg),
                         },
                         DiffError::InvalidFormat(msg) => CliError::ConfigLoad(msg),
-                    }
-                })?;
+                    })?;
                 (
                     content,
                     None,

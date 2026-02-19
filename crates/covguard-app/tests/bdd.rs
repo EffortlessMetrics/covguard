@@ -450,14 +450,14 @@ fn given_lcov_uncovered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -469,14 +469,14 @@ fn given_lcov_all_covered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,5
 DA:2,5
 DA:3,5
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -493,13 +493,13 @@ fn given_lcov_any_values(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,1
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -512,14 +512,14 @@ fn given_lcov_ignore_line_uncovered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -531,14 +531,14 @@ fn given_lcov_modified_uncovered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,0
 DA:3,1
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -550,14 +550,14 @@ fn given_lcov_partial_middle_covered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,5
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -596,7 +596,7 @@ fn given_lcov_3_covered_2_not(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,1
@@ -605,7 +605,7 @@ DA:4,0
 DA:5,0
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -617,13 +617,13 @@ fn given_lcov_specific_line_uncovered(world: &mut CovguardWorld, line_num: i32) 
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:{line},0
 end_of_record
 "#,
-        file = file,
-        line = line_num
+            file = file,
+            line = line_num
         ),
     );
 }
@@ -660,7 +660,7 @@ fn given_lcov_mixed_coverage(
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{covered}
 DA:1,5
 DA:2,5
@@ -670,8 +670,8 @@ DA:1,0
 DA:2,0
 end_of_record
 "#,
-        covered = covered_file,
-        uncovered = uncovered_file
+            covered = covered_file,
+            uncovered = uncovered_file
         ),
     );
 }
@@ -682,13 +682,13 @@ fn given_lcov_only_covers_one_file(world: &mut CovguardWorld, file_path: String)
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,5
 DA:2,5
 end_of_record
 "#,
-        file = file_path
+            file = file_path
         ),
     );
 }
@@ -712,7 +712,7 @@ fn given_lcov_explicit_zero(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
@@ -721,7 +721,7 @@ LH:0
 LF:3
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -732,7 +732,7 @@ fn given_lcov_for_file_uncovered(world: &mut CovguardWorld, file_path: String) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
@@ -740,7 +740,7 @@ DA:3,0
 DA:4,0
 end_of_record
 "#,
-        file = file_path
+            file = file_path
         ),
     );
 }
@@ -751,14 +751,14 @@ fn given_lcov_for_normalized_path(world: &mut CovguardWorld, file_path: String) 
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,0
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file_path
+            file = file_path
         ),
     );
 }
@@ -775,7 +775,7 @@ fn given_lcov_both_files_covered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{f1}
 DA:1,5
 DA:2,5
@@ -785,8 +785,8 @@ DA:1,5
 DA:2,5
 end_of_record
 "#,
-        f1 = file1,
-        f2 = file2
+            f1 = file1,
+            f2 = file2
         ),
     );
 }
@@ -798,15 +798,15 @@ fn given_lcov_all_lines_hits(world: &mut CovguardWorld, hits: i32) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,{hits}
 DA:2,{hits}
 DA:3,{hits}
 end_of_record
 "#,
-        file = file,
-        hits = hits
+            file = file,
+            hits = hits
         ),
     );
 }
@@ -818,14 +818,14 @@ fn given_lcov_one_of_three_covered(world: &mut CovguardWorld) {
     set_single_lcov(
         world,
         format!(
-        r#"TN:
+            r#"TN:
 SF:{file}
 DA:1,1
 DA:2,0
 DA:3,0
 end_of_record
 "#,
-        file = file
+            file = file
         ),
     );
 }
@@ -845,7 +845,9 @@ fn given_multiple_lcov_inputs(world: &mut CovguardWorld) {
     ];
 }
 
-#[given(expr = "an LCOV report with absolute SF paths under {string} where those lines have 0 hits")]
+#[given(
+    expr = "an LCOV report with absolute SF paths under {string} where those lines have 0 hits"
+)]
 fn given_lcov_absolute_paths(world: &mut CovguardWorld, prefix: String) {
     let file = &world.current_file;
     let absolute = format!(
@@ -1565,8 +1567,7 @@ fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
 #[then(expr = "annotations rendered with limit {int} contain at most {int} entries")]
 fn then_annotations_with_limit_count(world: &mut CovguardWorld, limit: i32, max_count: i32) {
     let result = world.result.as_ref().expect("check should have been run");
-    let annotations =
-        covguard_app::render_annotations_with_limit(&result.report, limit as usize);
+    let annotations = covguard_app::render_annotations_with_limit(&result.report, limit as usize);
     let actual = annotations
         .lines()
         .filter(|line| line.starts_with("::"))

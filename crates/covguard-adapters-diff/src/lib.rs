@@ -54,7 +54,12 @@ impl DiffProvider for GitDiffProvider {
             .map_err(|e| e.to_string())
     }
 
-    fn load_diff_from_git(&self, base: &str, head: &str, repo_root: &Path) -> Result<String, String> {
+    fn load_diff_from_git(
+        &self,
+        base: &str,
+        head: &str,
+        repo_root: &Path,
+    ) -> Result<String, String> {
         load_diff_from_git(base, head, repo_root).map_err(|e| e.to_string())
     }
 }

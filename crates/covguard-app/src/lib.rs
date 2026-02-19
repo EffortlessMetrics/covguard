@@ -33,10 +33,10 @@ use covguard_adapters_coverage::LcovError;
 use covguard_adapters_diff::DiffError;
 use covguard_config::should_include_path;
 pub use covguard_domain::MissingBehavior;
-pub use covguard_ports::{Clock, CoverageMap, CoverageProvider, DiffProvider, RepoReader};
 use covguard_domain::{
     EvalInput, EvalOutput, Policy, Scope as DomainScope, evaluate, has_ignore_directive,
 };
+pub use covguard_ports::{Clock, CoverageMap, CoverageProvider, DiffProvider, RepoReader};
 use covguard_render::{
     DEFAULT_MAX_ANNOTATIONS, DEFAULT_MAX_LINES, DEFAULT_MAX_SARIF_RESULTS,
     render_annotations as render_annotations_impl, render_markdown as render_markdown_impl,
@@ -1253,7 +1253,11 @@ mod tests {
     }
 
     impl CoverageProvider for FakeCoverageProvider {
-        fn parse_lcov(&self, _text: &str, _strip_prefixes: &[String]) -> Result<CoverageMap, String> {
+        fn parse_lcov(
+            &self,
+            _text: &str,
+            _strip_prefixes: &[String],
+        ) -> Result<CoverageMap, String> {
             Ok(self.map.clone())
         }
 

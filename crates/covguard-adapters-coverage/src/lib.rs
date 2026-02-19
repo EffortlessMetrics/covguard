@@ -38,11 +38,18 @@ pub enum LcovError {
 pub struct LcovCoverageProvider;
 
 impl CoverageProvider for LcovCoverageProvider {
-    fn parse_lcov(&self, text: &str, strip_prefixes: &[String]) -> Result<covguard_ports::CoverageMap, String> {
+    fn parse_lcov(
+        &self,
+        text: &str,
+        strip_prefixes: &[String],
+    ) -> Result<covguard_ports::CoverageMap, String> {
         parse_lcov_with_strip(text, strip_prefixes).map_err(|e| e.to_string())
     }
 
-    fn merge_coverage(&self, maps: Vec<covguard_ports::CoverageMap>) -> covguard_ports::CoverageMap {
+    fn merge_coverage(
+        &self,
+        maps: Vec<covguard_ports::CoverageMap>,
+    ) -> covguard_ports::CoverageMap {
         merge_coverage(maps)
     }
 }
