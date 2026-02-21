@@ -8,6 +8,7 @@ use std::ops::RangeInclusive;
 use std::path::Path;
 
 use covguard_ports::{DiffParseResult as PortDiffParseResult, DiffProvider};
+use covguard_paths::normalize_diff_path;
 use thiserror::Error;
 
 // ============================================================================
@@ -100,21 +101,7 @@ pub fn load_diff_from_git(base: &str, head: &str, repo_root: &Path) -> Result<St
 /// assert_eq!(normalize_path("src\\lib.rs"), "src/lib.rs");
 /// ```
 pub fn normalize_path(path: &str) -> String {
-    let path = path.trim();
-
-    // Convert backslashes to forward slashes
-    let path = path.replace('\\', "/");
-
-    // Strip a/ or b/ prefix (git diff convention)
-    let path = path
-        .strip_prefix("b/")
-        .or_else(|| path.strip_prefix("a/"))
-        .unwrap_or(&path);
-
-    // Remove leading ./
-    let path = path.strip_prefix("./").unwrap_or(path);
-
-    path.to_string()
+    normalize_diff_path(path)
 }
 
 // ============================================================================

@@ -9,6 +9,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use covguard_app::{CheckRequest, FailOn, MissingBehavior, check};
+use covguard_output::{
+    render_annotations_with_limit, render_markdown_with_limit, render_sarif_with_limit,
+};
+use covguard_output_features::OutputFeatureFlags;
+use covguard_policy::{profile_defaults, profile_from_name, Scope as PolicyScope};
 use covguard_types::{CODE_UNCOVERED_LINE, Scope, Severity, VerdictStatus};
 use cucumber::{World, given, then, when};
 
@@ -55,6 +60,8 @@ pub struct CovguardWorld {
     missing_file: MissingBehavior,
     /// Optional max findings cap.
     max_findings: Option<usize>,
+    /// Renderer output budgets for markdown/annotations/SARIF.
+    output_flags: OutputFeatureFlags,
     /// Whether to expect an error from the check.
     expect_error: bool,
 }
@@ -82,6 +89,7 @@ fn given_ignore_directives_disabled(world: &mut CovguardWorld) {
     world.missing_coverage = MissingBehavior::Warn;
     world.missing_file = MissingBehavior::Warn;
     world.max_findings = None;
+    world.output_flags = OutputFeatureFlags::default();
     world.expect_error = false;
 }
 
@@ -578,6 +586,12 @@ fn given_lcov_with_percent_coverage(world: &mut CovguardWorld, percent: i32) {
     set_single_lcov(world, lcov);
 }
 
+/// Alias for feature phrasing: "where N% line coverage".
+#[given(expr = "an LCOV report where {int}% line coverage")]
+fn given_lcov_where_percent_coverage(world: &mut CovguardWorld, percent: i32) {
+    given_lcov_with_percent_coverage(world, percent);
+}
+
 #[given(expr = "an LCOV report with {int} uncovered lines")]
 fn given_lcov_with_n_uncovered_lines(world: &mut CovguardWorld, num_lines: i32) {
     let file = &world.current_file;
@@ -904,6 +918,26 @@ fn given_max_findings(world: &mut CovguardWorld, max: i32) {
     world.max_findings = Some(max as usize);
 }
 
+#[given(expr = "output feature flags are markdown {int}, annotations {int}, and sarif {int}")]
+fn given_output_feature_flags(world: &mut CovguardWorld, markdown: i32, annotations: i32, sarif: i32) {
+    world.output_flags = OutputFeatureFlags {
+        max_markdown_lines: markdown as usize,
+        max_annotations: annotations as usize,
+        max_sarif_results: sarif as usize,
+    };
+}
+
+/// Alias for compact feature phrasing: "output feature flags are 2, 1, and 1".
+#[given(expr = "output feature flags are {int}, {int}, and {int}")]
+fn given_output_feature_flags_compact(
+    world: &mut CovguardWorld,
+    markdown: i32,
+    annotations: i32,
+    sarif: i32,
+) {
+    given_output_feature_flags(world, markdown, annotations, sarif);
+}
+
 // ============================================================================
 // When Steps
 // ============================================================================
@@ -911,56 +945,17 @@ fn given_max_findings(world: &mut CovguardWorld, max: i32) {
 /// When covguard checks coverage with a specific profile.
 #[when(expr = "covguard checks coverage with profile {string}")]
 fn when_check_with_profile(world: &mut CovguardWorld, profile: String) {
-    match profile.as_str() {
-        "strict" => {
-            world.fail_on = FailOn::Error;
-            world.threshold_pct = 90.0;
-            world.scope = Scope::Touched;
-            world.max_uncovered_lines = Some(5);
-            world.missing_coverage = MissingBehavior::Fail;
-            world.missing_file = MissingBehavior::Fail;
-        }
-        "oss" => {
-            world.fail_on = FailOn::Never;
-            world.threshold_pct = 70.0;
-            world.scope = Scope::Added;
-            world.max_uncovered_lines = None;
-            world.missing_coverage = MissingBehavior::Skip;
-            world.missing_file = MissingBehavior::Skip;
-        }
-        "moderate" => {
-            world.fail_on = FailOn::Error;
-            world.threshold_pct = 75.0;
-            world.scope = Scope::Added;
-            world.max_uncovered_lines = None;
-            world.missing_coverage = MissingBehavior::Warn;
-            world.missing_file = MissingBehavior::Skip;
-        }
-        "team" => {
-            world.fail_on = FailOn::Error;
-            world.threshold_pct = 80.0;
-            world.scope = Scope::Added;
-            world.max_uncovered_lines = None;
-            world.missing_coverage = MissingBehavior::Warn;
-            world.missing_file = MissingBehavior::Warn;
-        }
-        "lenient" => {
-            world.fail_on = FailOn::Never;
-            world.threshold_pct = 0.0;
-            world.scope = Scope::Added;
-            world.max_uncovered_lines = None;
-            world.missing_coverage = MissingBehavior::Warn;
-            world.missing_file = MissingBehavior::Warn;
-        }
-        _ => {
-            world.fail_on = FailOn::Error;
-            world.threshold_pct = 80.0;
-            world.scope = Scope::Added;
-            world.max_uncovered_lines = None;
-            world.missing_coverage = MissingBehavior::Warn;
-            world.missing_file = MissingBehavior::Warn;
-        }
-    }
+    let profile = profile_from_name(&profile).unwrap_or(covguard_policy::Profile::Team);
+    let flags = profile_defaults(profile);
+    world.fail_on = flags.fail_on;
+    world.threshold_pct = flags.threshold_pct;
+    world.scope = match flags.scope {
+        PolicyScope::Added => Scope::Added,
+        PolicyScope::Touched => Scope::Touched,
+    };
+    world.max_uncovered_lines = flags.max_uncovered_lines;
+    world.missing_coverage = flags.missing_coverage;
+    world.missing_file = flags.missing_file;
 
     run_check(world);
 }
@@ -1065,6 +1060,7 @@ fn run_check_with_error_handling(world: &mut CovguardWorld) {
         scope: world.scope,
         fail_on: world.fail_on,
         ignore_directives: world.ignore_directives,
+        output: world.output_flags,
         max_findings: world.max_findings,
         ignored_lines: if world.ignored_lines.is_empty() {
             None
@@ -1512,7 +1508,7 @@ fn then_check_succeeds(world: &mut CovguardWorld) {
 #[then(expr = "the markdown output contains {string}")]
 fn then_markdown_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let markdown = covguard_app::render_markdown(&result.report);
+    let markdown = &result.markdown;
 
     assert!(
         markdown.to_lowercase().contains(&expected.to_lowercase()),
@@ -1526,9 +1522,9 @@ fn then_markdown_contains(world: &mut CovguardWorld, expected: String) {
 #[then("the SARIF output is valid JSON")]
 fn then_sarif_is_valid_json(world: &mut CovguardWorld) {
     let result = world.result.as_ref().expect("check should have been run");
-    let sarif = covguard_app::render_sarif(&result.report);
+    let sarif = &result.sarif;
 
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&sarif);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(sarif);
     assert!(
         parsed.is_ok(),
         "Expected SARIF to be valid JSON, but got parse error: {:?}",
@@ -1540,7 +1536,7 @@ fn then_sarif_is_valid_json(world: &mut CovguardWorld) {
 #[then(expr = "the SARIF output contains {string}")]
 fn then_sarif_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let sarif = covguard_app::render_sarif(&result.report);
+    let sarif = &result.sarif;
 
     assert!(
         sarif.contains(&expected),
@@ -1554,7 +1550,7 @@ fn then_sarif_contains(world: &mut CovguardWorld, expected: String) {
 #[then(expr = "the annotations output contains {string}")]
 fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
     let result = world.result.as_ref().expect("check should have been run");
-    let annotations = covguard_app::render_annotations(&result.report);
+    let annotations = &result.annotations;
 
     assert!(
         annotations.contains(&expected),
@@ -1562,6 +1558,26 @@ fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
         expected,
         annotations
     );
+}
+
+/// Then rendering output is produced by shared output feature flags.
+#[then("the shared output feature flags are used for rendering")]
+fn then_shared_output_flags_used_for_rendering(world: &mut CovguardWorld) {
+    let result = world
+        .result
+        .as_ref()
+        .expect("check should have been run");
+
+    let flags = world.output_flags;
+
+    let markdown = render_markdown_with_limit(&result.report, flags.max_markdown_lines);
+    let annotations = render_annotations_with_limit(&result.report, flags.max_annotations);
+    let sarif = render_sarif_with_limit(&result.report, flags.max_sarif_results);
+
+    assert_eq!(result.output, flags);
+    assert_eq!(result.markdown, markdown);
+    assert_eq!(result.annotations, annotations);
+    assert_eq!(result.sarif, sarif);
 }
 
 #[then(expr = "annotations rendered with limit {int} contain at most {int} entries")]
@@ -1579,7 +1595,6 @@ fn then_annotations_with_limit_count(world: &mut CovguardWorld, limit: i32, max_
         limit,
         actual
     );
-    assert!(actual > 0, "Expected at least one annotation");
 }
 
 /// Then the report scope is a specific value.

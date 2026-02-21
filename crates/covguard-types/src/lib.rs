@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+pub use covguard_policy::Scope;
 
 // ============================================================================
 // Schema and Code Constants
@@ -185,19 +186,8 @@ pub enum VerdictStatus {
     Skip,
 }
 
-/// Scope of lines to evaluate.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Scope {
-    /// Only evaluate added lines.
-    #[default]
-    Added,
-    /// Evaluate all touched (added + modified) lines.
-    Touched,
-}
-
 /// Input availability status for capabilities block.
-///
+/// 
 /// Used to implement "No Green By Omission" - explicitly report input availability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

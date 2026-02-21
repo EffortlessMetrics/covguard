@@ -9,7 +9,7 @@ This crate handles all configuration management including TOML parsing, built-in
 ## Key Types
 
 - **`Config`** - TOML configuration structure
-- **`Profile`** - Built-in profiles: Oss, Moderate, Team, Strict
+- **`Profile`** - Built-in profiles: Oss, Moderate, Team, Strict, Lenient
 - **`EffectiveConfig`** - Resolved configuration after applying precedence
 - **`CliOverrides`** - CLI argument overrides
 - **`Scope`** - Added, Touched
@@ -33,6 +33,7 @@ This crate handles all configuration management including TOML parsing, built-in
 | Moderate | 75%       | Added   | Error   |
 | Team     | 80%       | Added   | Error   |
 | Strict   | 90%       | Touched | Error   |
+| Lenient  | 0%        | Added   | Never   |
 
 ## Precedence Order
 

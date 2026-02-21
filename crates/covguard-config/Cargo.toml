@@ -17,3 +17,5 @@ serde = { workspace = true, features = ["derive"] }
 toml.workspace = true
 thiserror.workspace = true
 glob.workspace = true
+covguard-output-features.workspace = true
+covguard-policy = { path = "../covguard-policy", version = "0.2.0" }

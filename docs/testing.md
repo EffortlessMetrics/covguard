@@ -35,7 +35,9 @@ cd fuzz && cargo +nightly fuzz run fuzz_diff_parser
 | covguard-adapters-diff | Unit + Property tests | `crates/covguard-adapters-diff/src/lib.rs` |
 | covguard-adapters-coverage | Unit + Property tests | `crates/covguard-adapters-coverage/src/lib.rs` |
 | covguard-render | Unit + Snapshot tests | `crates/covguard-render/src/lib.rs` |
-| covguard-app | Integration + Snapshot tests + BDD + schema tests | `crates/covguard-app/src/lib.rs`, `crates/covguard-app/tests/` |
+| covguard-output | Unit + Snapshot tests | `crates/covguard-output/src/lib.rs` |
+| covguard-app | Integration tests (BDD + schema) + compatibility facade | `crates/covguard-app/tests/` |
+| covguard-orchestrator | Unit + snapshot tests | `crates/covguard-orchestrator/src/lib.rs` |
 | covguard-core | Compatibility facade (re-export only, no dedicated test suite) | `crates/covguard-core/src/lib.rs` |
 | covguard | CLI unit + integration tests | `crates/covguard-cli/src/main.rs`, `crates/covguard-cli/tests/integration.rs` |
 
@@ -151,7 +153,8 @@ cargo +nightly fuzz run fuzz_diff_parser -- -max_total_time=300
 Snapshot tests use the `insta` crate for output stability:
 
 - **covguard-render**: `crates/covguard-render/src/snapshots/`
-- **covguard-app**: `crates/covguard-app/src/snapshots/`
+- **covguard-orchestrator**: `crates/covguard-orchestrator/src/snapshots/`  
+  (legacy snapshots were migrated from façade-era fixture ownership)
 
 Update snapshots with:
 ```bash

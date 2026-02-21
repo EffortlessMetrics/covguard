@@ -23,7 +23,7 @@ Design constraints (non-negotiable):
 ## Clean / hexagonal architecture
 covguard follows a hexagonal structure:
 - **Domain core**: policy evaluation + aggregation (pure functions)
-- **Ports**: interfaces for “get diff mapping”, “get coverage map”, “read repo line text”, “write artifacts”
+- **Ports**: interfaces for “get diff mapping”, “get coverage map”, and “read repo line text”
 - **Adapters**: git diff invocation, patch parsing, LCOV parsing, filesystem IO, renderers, CLI
 
 ### Primary use case: CheckCoverageOnDiff
@@ -213,12 +213,13 @@ Emit SARIF results for uncovered lines and policy failures:
 | **covguard-types** | DTOs (Report, Finding, Verdict), schema IDs, error codes, serde |
 | **covguard-ports** | Shared port traits (`Clock`, `RepoReader`) for clean orchestration/adapter boundaries |
 | **covguard-domain** | Policy evaluation, metrics aggregation, deterministic ordering, ignore directive detection |
-| **covguard-config** | TOML parsing, profiles (Oss/Moderate/Team/Strict), precedence resolution |
+| **covguard-config** | TOML parsing, profiles (Oss/Moderate/Team/Strict/Lenient), precedence resolution |
 | **covguard-adapters-diff** | Unified diff parsing, path normalization, range merging |
 | **covguard-adapters-coverage** | LCOV parsing, coverage map merging |
 | **covguard-adapters-repo** | Filesystem `RepoReader` implementation for ignore directive inspection |
 | **covguard-render** | Markdown, GitHub annotations, SARIF renderers |
-| **covguard-app** | Orchestration and report assembly, `check()` entry point |
+| **covguard-app** | Compatibility facade over orchestration implementation |
+| **covguard-orchestrator** | Orchestration and report assembly, `check()` entry point |
 | **covguard-cli** | Clap CLI, file I/O, exit code mapping |
 | **xtask** | Schema generation, fixture management |
 

@@ -1,0 +1,19 @@
+[package]
+name = "covguard-adapters-artifacts"
+description = "Filesystem artifact adapters for covguard reports and fallback outputs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-adapters-artifacts"
+keywords = ["coverage", "diff", "testing", "cli"]
+categories = ["development-tools::testing", "command-line-utilities"]
+rust-version.workspace = true
+readme = "README.md"
+
+[dependencies]
+chrono.workspace = true
+covguard-types = { path = "../covguard-types", version = "0.2.0" }
+serde_json.workspace = true
+thiserror.workspace = true

@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 
 use covguard_ports::CoverageProvider;
+use covguard_paths::{normalize_coverage_path, normalize_coverage_path_with_strip};
 use thiserror::Error;
 
 // ============================================================================
@@ -74,53 +75,12 @@ impl CoverageProvider for LcovCoverageProvider {
 /// assert_eq!(normalize_path("src\\lib.rs"), "src/lib.rs");
 /// ```
 pub fn normalize_path(path: &str) -> String {
-    normalize_path_with_strip(path, &[])
+    normalize_coverage_path(path)
 }
 
 /// Normalize a file path with optional prefix stripping.
 pub fn normalize_path_with_strip(path: &str, strip_prefixes: &[String]) -> String {
-    let mut normalized = path.replace('\\', "/");
-
-    // Apply configured prefix strips (normalized to forward slashes)
-    for prefix in strip_prefixes {
-        let prefix_norm = prefix.replace('\\', "/");
-        if normalized.starts_with(&prefix_norm) {
-            normalized = normalized[prefix_norm.len()..].to_string();
-            break;
-        }
-    }
-
-    // Remove leading ./
-    while normalized.starts_with("./") {
-        normalized = normalized[2..].to_string();
-    }
-
-    // Handle common absolute path patterns
-    // Strip /home/user/project/ or /Users/user/project/ style prefixes
-    // by finding the last occurrence of common source directories
-    if normalized.starts_with('/') {
-        // Look for common source directory markers
-        for marker in &["/src/", "/lib/", "/test/", "/tests/"] {
-            if let Some(pos) = normalized.find(marker) {
-                // Keep from "src/" onwards (skip the leading /)
-                normalized = normalized[pos + 1..].to_string();
-                break;
-            }
-        }
-    }
-
-    // Handle Windows-style absolute paths (C:/...)
-    if normalized.len() > 2 && normalized.chars().nth(1) == Some(':') {
-        // Look for common source directory markers
-        for marker in &["/src/", "/lib/", "/test/", "/tests/"] {
-            if let Some(pos) = normalized.find(marker) {
-                normalized = normalized[pos + 1..].to_string();
-                break;
-            }
-        }
-    }
-
-    normalized
+    normalize_coverage_path_with_strip(path, strip_prefixes)
 }
 
 // ============================================================================

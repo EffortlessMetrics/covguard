@@ -43,14 +43,17 @@ covguard check \
 ## Crates
 
 - `covguard` (`crates/covguard-cli`): CLI binary
-- `covguard-app`: orchestration layer
+- `covguard-orchestrator`: orchestration layer
+- `covguard-app`: compatibility facade re-exporting `covguard-orchestrator`
 - `covguard-domain`: pure policy evaluation
 - `covguard-types`: report DTOs, codes, constants
 - `covguard-ports`: port traits and boundary types
 - `covguard-adapters-diff`: unified diff parser + git diff loader
 - `covguard-adapters-coverage`: LCOV parser/merger
 - `covguard-adapters-repo`: filesystem repo reader
+- `covguard-adapters-artifacts`: artifact persistence adapter (reports, raw artifacts)
 - `covguard-render`: markdown, annotations, SARIF renderers
+- `covguard-output`: shared output feature flags and renderer compatibility wrapper
 - `covguard-config`: config/profile resolution
 - `covguard-core`: compatibility facade re-exporting `covguard-app`
 

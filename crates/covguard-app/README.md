@@ -1,8 +1,14 @@
 # covguard-app
 
-Orchestration crate for covguard.
+Compatibility façade for the orchestration API.
+
+`covguard-app` now re-exports `covguard-orchestrator` to preserve the published
+public API while allowing the orchestration implementation to evolve as a separate
+microcrate.
 
 ## Pipeline
+
+The orchestration implementation now lives in `covguard-orchestrator`:
 
 1. Parse diff input
 2. Parse and merge LCOV coverage

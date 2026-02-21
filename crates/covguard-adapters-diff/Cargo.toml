@@ -15,6 +15,7 @@ rust-version.workspace = true
 [dependencies]
 thiserror.workspace = true
 covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
+covguard-paths.workspace = true
 
 [dev-dependencies]
 proptest = "1.10.0"

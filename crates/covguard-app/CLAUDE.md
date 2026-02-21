@@ -1,10 +1,14 @@
 # covguard-app
 
-High-level orchestration layer for diff coverage analysis.
+Compatibility facade for programmatic covguard access.
+
+`covguard-app` re-exports `covguard-orchestrator` to preserve the existing
+public API while keeping orchestration responsibilities in its own microcrate.
 
 ## Purpose
 
-This crate orchestrates the entire diff coverage pipeline, connecting adapters (diff parsing, coverage parsing) to the domain core and renderers. It is the main entry point for programmatic use.
+This crate exists for backwards-compatible consumption. The actual orchestration
+implementation now lives in `covguard-orchestrator`.
 
 ## Key Types
 
@@ -71,11 +75,4 @@ When `ignore_directives` is enabled and source paths are provided:
 
 ## Dependencies
 
-- `covguard-types` - DTOs
-- `covguard-ports` - Shared port traits
-- `covguard-domain` - Evaluation logic
-- `covguard-adapters-diff` - Diff parsing
-- `covguard-adapters-coverage` - LCOV parsing
-- `covguard-render` - Output formatting
-- `chrono` - Timestamps
-- `thiserror` - Error types
+- `covguard-orchestrator` - Backed orchestration implementation (re-exported)

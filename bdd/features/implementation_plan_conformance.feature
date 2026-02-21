@@ -48,6 +48,23 @@ Feature: Implementation plan conformance
     When covguard checks coverage
     Then annotations rendered with limit 2 contain at most 2 entries
 
+  Scenario: Rendering goes through shared output feature flags
+    Given a diff adding 10 lines to "src/lib.rs"
+    And an LCOV report where 0% line coverage
+    And a coverage threshold of 0%
+    When covguard checks coverage
+    Then the shared output feature flags are used for rendering
+
+  Scenario: Custom output feature flags control render budgets
+    Given a diff adding 10 lines to "src/lib.rs"
+    And an LCOV report where 0% line coverage
+    And a coverage threshold of 0%
+    And output feature flags are 2, 1, and 1
+    When covguard checks coverage
+    Then the shared output feature flags are used for rendering
+    And annotations rendered with limit 1 contain at most 1 entries
+    And the markdown output contains "*Showing 2 of 10 uncovered lines*"
+
   Scenario: OSS profile does not fail when coverage is missing for one file
     Given a diff adding lines to "src/lib.rs" and "src/other.rs"
     And an LCOV report that only covers "src/lib.rs"

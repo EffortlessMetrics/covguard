@@ -11,54 +11,12 @@ use covguard_types::{
     CODE_COVERAGE_BELOW_THRESHOLD, CODE_MISSING_COVERAGE_FOR_FILE, CODE_UNCOVERED_LINE, Finding,
     Location, Severity, VerdictStatus, compute_fingerprint,
 };
+pub use covguard_policy::{FailOn, MissingBehavior, Scope};
+pub use covguard_directives::has_ignore_directive;
 
 // ============================================================================
 // Policy Configuration
 // ============================================================================
-
-/// Determines when the evaluation should fail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FailOn {
-    /// Fail if there are any error-level findings.
-    #[default]
-    Error,
-    /// Fail if there are any warn-level or error-level findings.
-    Warn,
-    /// Never fail (always pass unless there's a runtime error).
-    Never,
-}
-
-/// How to handle missing coverage data.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MissingBehavior {
-    /// Skip missing coverage (do not count toward percentage, no findings).
-    Skip,
-    /// Warn on missing coverage.
-    #[default]
-    Warn,
-    /// Fail on missing coverage.
-    Fail,
-}
-
-/// Scope of lines to evaluate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Scope {
-    /// Only evaluate added lines.
-    #[default]
-    Added,
-    /// Evaluate all touched (added + modified) lines.
-    Touched,
-}
-
-impl Scope {
-    /// Convert to string representation.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Scope::Added => "added",
-            Scope::Touched => "touched",
-        }
-    }
-}
 
 /// Policy configuration for coverage evaluation.
 #[derive(Debug, Clone)]
@@ -400,55 +358,6 @@ fn determine_verdict(findings: &[Finding], policy: &Policy) -> VerdictStatus {
             }
         }
     }
-}
-
-// ============================================================================
-// Ignore Directive Detection
-// ============================================================================
-
-/// Check if a line contains a `covguard: ignore` directive.
-///
-/// The directive can appear in any comment style:
-/// - `// covguard: ignore` (Rust, C, JS, etc.)
-/// - `# covguard: ignore` (Python, Shell, YAML, etc.)
-/// - `-- covguard: ignore` (SQL, Haskell, Lua)
-/// - `/* covguard: ignore */` (block comments)
-///
-/// Matching is case-insensitive and tolerant of whitespace.
-///
-/// # Examples
-///
-/// ```
-/// use covguard_domain::has_ignore_directive;
-///
-/// assert!(has_ignore_directive("let x = 1; // covguard: ignore"));
-/// assert!(has_ignore_directive("# covguard:ignore"));
-/// assert!(has_ignore_directive("/* COVGUARD: IGNORE */"));
-/// assert!(!has_ignore_directive("let x = 1;"));
-/// ```
-pub fn has_ignore_directive(line: &str) -> bool {
-    let line_lower = line.to_lowercase();
-
-    // Look for "covguard:" followed by optional whitespace and "ignore"
-    // This handles various comment styles automatically since we just
-    // search for the directive pattern anywhere in the line
-    if let Some(pos) = line_lower.find("covguard:") {
-        let after = &line_lower[pos + 9..]; // len("covguard:") = 9
-        let trimmed = after.trim_start();
-        return trimmed.starts_with("ignore");
-    }
-
-    // Also support "covguard-ignore" syntax (hyphen instead of colon)
-    if let Some(pos) = line_lower.find("covguard-ignore") {
-        // Make sure it's in a comment context (has a comment marker before it)
-        let before = &line_lower[..pos];
-        return before.contains("//")
-            || before.contains('#')
-            || before.contains("--")
-            || before.contains("/*");
-    }
-
-    false
 }
 
 // ============================================================================
@@ -945,54 +854,6 @@ mod tests {
         assert_eq!(output.metrics.changed_lines_total, 5);
         assert_eq!(output.metrics.covered_lines, 2);
         assert_eq!(output.metrics.uncovered_lines, 3);
-    }
-
-    // ========================================================================
-    // Ignore Directive Tests
-    // ========================================================================
-
-    #[test]
-    fn test_has_ignore_directive_rust_comment() {
-        assert!(has_ignore_directive("let x = 1; // covguard: ignore"));
-        assert!(has_ignore_directive("// covguard: ignore"));
-        assert!(has_ignore_directive("    // covguard: ignore"));
-        assert!(has_ignore_directive("// COVGUARD: IGNORE"));
-        assert!(has_ignore_directive("// covguard:ignore")); // no space after colon
-    }
-
-    #[test]
-    fn test_has_ignore_directive_python_comment() {
-        assert!(has_ignore_directive("x = 1  # covguard: ignore"));
-        assert!(has_ignore_directive("# covguard: ignore"));
-        assert!(has_ignore_directive("#covguard:ignore"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_block_comment() {
-        assert!(has_ignore_directive("/* covguard: ignore */"));
-        assert!(has_ignore_directive("int x = 1; /* covguard: ignore */"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_sql_comment() {
-        assert!(has_ignore_directive("-- covguard: ignore"));
-        assert!(has_ignore_directive("SELECT 1; -- covguard: ignore"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_hyphen_syntax() {
-        assert!(has_ignore_directive("// covguard-ignore"));
-        assert!(has_ignore_directive("# covguard-ignore"));
-        assert!(has_ignore_directive("-- covguard-ignore"));
-        assert!(has_ignore_directive("/* covguard-ignore */"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_negative_cases() {
-        assert!(!has_ignore_directive("let x = 1;"));
-        assert!(!has_ignore_directive("// some other comment"));
-        assert!(!has_ignore_directive("// covguard")); // missing ignore
-        assert!(!has_ignore_directive("// ignore covguard")); // wrong order
     }
 
     #[test]

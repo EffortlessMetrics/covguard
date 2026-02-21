@@ -4,21 +4,27 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 use covguard_adapters_diff::{DiffError, load_diff_from_git};
-use covguard_adapters_repo::FsRepoReader;
-use covguard_app::{
-    AppError, CheckRequest, FailOn, MissingBehavior, SystemClock, check_with_clock_and_reader,
+use covguard_adapters_artifacts::{
+    ensure_parent_dir as ensure_parent_dir_artifacts,
+    write_fallback_receipt as write_fallback_receipt_artifacts,
+    write_raw_artifacts as write_raw_artifacts_from_adapter,
+    write_report as write_report_artifacts,
+    write_text as write_text_artifacts,
+    ArtifactWriteError,
 };
+#[cfg(test)]
+use covguard_adapters_artifacts::write_raw_artifacts_to as write_raw_artifacts_to_artifacts;
+use covguard_adapters_repo::FsRepoReader;
+use covguard_app::{AppError, CheckRequest, SystemClock, check_with_clock_and_reader};
 use covguard_config::{
     CliOverrides, Profile, Scope as ConfigScope, discover_config, load_config, resolve_config,
 };
+use covguard_output_features::OutputFeatureConfig;
 #[cfg(test)]
 use covguard_types::CODE_UNCOVERED_LINE;
-use covguard_types::{
-    CHECK_ID_RUNTIME, CODE_RUNTIME_ERROR, Capabilities, Finding, InputCapability, InputStatus,
-    Inputs, InputsCapability, REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Report,
-    ReportData, Run, SENSOR_SCHEMA_ID, Scope, Tool, Verdict, VerdictCounts, VerdictStatus,
-    compute_fingerprint, explain,
-};
+use covguard_types::{REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Scope, explain};
+#[cfg(test)]
+use covguard_types::SENSOR_SCHEMA_ID;
 use std::fs;
 #[cfg(not(test))]
 use std::io::IsTerminal;
@@ -62,6 +68,19 @@ enum CliProfile {
     Moderate,
     Team,
     Strict,
+    Lenient,
+}
+
+impl From<CliProfile> for Profile {
+    fn from(profile: CliProfile) -> Self {
+        match profile {
+            CliProfile::Oss => Self::Oss,
+            CliProfile::Moderate => Self::Moderate,
+            CliProfile::Team => Self::Team,
+            CliProfile::Strict => Self::Strict,
+            CliProfile::Lenient => Self::Lenient,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -132,6 +151,18 @@ enum Commands {
         /// Prefix to strip from LCOV SF paths (repeatable)
         #[arg(long)]
         path_strip: Vec<String>,
+
+        /// Maximum markdown lines emitted in report output.
+        #[arg(long)]
+        max_markdown_lines: Option<usize>,
+
+        /// Maximum annotations emitted in report output.
+        #[arg(long)]
+        max_annotations: Option<usize>,
+
+        /// Maximum SARIF results emitted in report output.
+        #[arg(long)]
+        max_sarif_results: Option<usize>,
 
         /// Maximum number of findings to include in report (truncation)
         #[arg(long)]
@@ -282,13 +313,21 @@ fn run(cli: Cli) -> Result<i32, CliError> {
             threshold,
             no_ignore,
             path_strip,
+            max_markdown_lines,
+            max_annotations,
+            max_sarif_results,
             max_findings,
             payload,
         } => {
             let is_cockpit = matches!(mode, CliMode::Cockpit);
             let out_path = out.clone();
+            let output = OutputFeatureConfig {
+                max_markdown_lines,
+                max_annotations,
+                max_sarif_results,
+            };
 
-            match run_check(
+            match run_check_with_output(
                 mode,
                 diff_file,
                 base,
@@ -305,6 +344,7 @@ fn run(cli: Cli) -> Result<i32, CliError> {
                 threshold,
                 no_ignore,
                 path_strip,
+                output,
                 max_findings,
                 payload,
             ) {
@@ -329,6 +369,7 @@ fn run(cli: Cli) -> Result<i32, CliError> {
     }
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn run_check(
     mode: CliMode,
@@ -374,6 +415,53 @@ fn run_check(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_check_with_output(
+    mode: CliMode,
+    diff_file: Option<String>,
+    base: Option<String>,
+    head: Option<String>,
+    lcov: Vec<String>,
+    out: String,
+    md: Option<String>,
+    sarif: Option<String>,
+    raw: bool,
+    root: Option<String>,
+    config_path: Option<String>,
+    profile: Option<CliProfile>,
+    scope: Option<CliScope>,
+    threshold: Option<f64>,
+    no_ignore: bool,
+    path_strip: Vec<String>,
+    output: OutputFeatureConfig,
+    max_findings: Option<usize>,
+    payload: Option<String>,
+) -> Result<i32, CliError> {
+    run_check_with_stdin_with_output(
+        mode,
+        diff_file,
+        base,
+        head,
+        lcov,
+        out,
+        md,
+        sarif,
+        raw,
+        root,
+        config_path,
+        profile,
+        scope,
+        threshold,
+        no_ignore,
+        path_strip,
+        output,
+        max_findings,
+        payload,
+        read_stdin_diff,
+    )
+}
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 fn run_check_with_stdin<F>(
     mode: CliMode,
     diff_file: Option<String>,
@@ -391,6 +479,56 @@ fn run_check_with_stdin<F>(
     threshold: Option<f64>,
     no_ignore: bool,
     path_strip: Vec<String>,
+    max_findings: Option<usize>,
+    payload: Option<String>,
+    read_stdin: F,
+) -> Result<i32, CliError>
+where
+    F: Fn(bool) -> Result<Option<String>, CliError>,
+{
+    run_check_with_stdin_with_output(
+        mode,
+        diff_file,
+        base,
+        head,
+        lcov,
+        out,
+        md,
+        sarif,
+        raw,
+        root,
+        config_path,
+        profile,
+        scope,
+        threshold,
+        no_ignore,
+        path_strip,
+        OutputFeatureConfig::default(),
+        max_findings,
+        payload,
+        read_stdin,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_check_with_stdin_with_output<F>(
+    mode: CliMode,
+    diff_file: Option<String>,
+    base: Option<String>,
+    head: Option<String>,
+    lcov: Vec<String>,
+    out: String,
+    md: Option<String>,
+    sarif: Option<String>,
+    raw: bool,
+    root: Option<String>,
+    config_path: Option<String>,
+    profile: Option<CliProfile>,
+    scope: Option<CliScope>,
+    threshold: Option<f64>,
+    no_ignore: bool,
+    path_strip: Vec<String>,
+    output: OutputFeatureConfig,
     max_findings: Option<usize>,
     payload: Option<String>,
     read_stdin: F,
@@ -425,17 +563,13 @@ where
         } else {
             Some(path_strip.clone())
         },
+        output: Some(output),
     };
 
     // Apply profile override if specified
     let config_with_profile = if let Some(cli_profile) = profile {
         let mut config = loaded_config.clone().unwrap_or_default();
-        config.profile = Some(match cli_profile {
-            CliProfile::Oss => Profile::Oss,
-            CliProfile::Moderate => Profile::Moderate,
-            CliProfile::Team => Profile::Team,
-            CliProfile::Strict => Profile::Strict,
-        });
+        config.profile = Some(cli_profile.into());
         Some(config)
     } else {
         loaded_config.clone()
@@ -523,17 +657,6 @@ where
         write_raw_artifacts(&diff_content, &lcov_texts)?;
     }
 
-    // Convert fail_on from config to app type
-    let fail_on = match effective.fail_on {
-        covguard_config::FailOn::Error => FailOn::Error,
-        covguard_config::FailOn::Warn => FailOn::Warn,
-        covguard_config::FailOn::Never => FailOn::Never,
-    };
-
-    // Map missing behaviors from config to app types
-    let missing_coverage = map_missing_behavior(effective.missing_coverage);
-    let missing_file = map_missing_behavior(effective.missing_file);
-
     // In cockpit mode, enable sensor schema for proper capabilities block
     let sensor_schema = is_cockpit_mode;
 
@@ -546,16 +669,17 @@ where
         lcov_texts,
         lcov_paths: lcov.clone(),
         max_uncovered_lines: effective.max_uncovered_lines,
-        missing_coverage,
-        missing_file,
+        missing_coverage: effective.missing_coverage,
+        missing_file: effective.missing_file,
         include_patterns: effective.include_patterns.clone(),
         exclude_patterns: effective.exclude_patterns.clone(),
         path_strip: effective.path_strip.clone(),
         threshold_pct: effective.threshold_pct,
         scope: domain_scope,
-        fail_on,
+        fail_on: effective.fail_on,
         ignore_directives: effective.ignore_directives,
         ignored_lines: None, // Will be detected from source files
+        output: effective.output,
         sensor_schema,
         max_findings,
     };
@@ -574,51 +698,26 @@ where
             .cockpit_receipt
             .as_ref()
             .expect("cockpit receipt missing");
-        let receipt_json = serde_json::to_string_pretty(receipt)?;
-        fs::write(&out, &receipt_json).map_err(|e| CliError::FileWrite {
-            path: out.clone(),
-            source: e,
-        })?;
+        write_report_artifacts(&out, receipt).map_err(map_artifact_error)?;
 
-        // Write domain report (full payload) to --payload or default extras path
+        // Write domain report (full payload) to --payload or default extras path.
         let payload_path = payload.unwrap_or_else(|| {
             let out_dir = Path::new(&out).parent().unwrap_or_else(|| Path::new("."));
-            out_dir
-                .join("extras")
-                .join("payload.json")
-                .display()
-                .to_string()
+            out_dir.join("extras").join("payload.json").display().to_string()
         });
-        ensure_parent_dir(&payload_path)?;
-        let domain_json = serde_json::to_string_pretty(&result.report)?;
-        fs::write(&payload_path, &domain_json).map_err(|e| CliError::FileWrite {
-            path: payload_path,
-            source: e,
-        })?;
+        write_report_artifacts(&payload_path, &result.report).map_err(map_artifact_error)?;
     } else {
-        let report_json = serde_json::to_string_pretty(&result.report)?;
-        fs::write(&out, &report_json).map_err(|e| CliError::FileWrite {
-            path: out.clone(),
-            source: e,
-        })?;
+        write_report_artifacts(&out, &result.report).map_err(map_artifact_error)?;
     }
 
-    // Write markdown if requested
+    // Write markdown if requested.
     if let Some(md_path) = md {
-        ensure_parent_dir(&md_path)?;
-        fs::write(&md_path, &result.markdown).map_err(|e| CliError::FileWrite {
-            path: md_path,
-            source: e,
-        })?;
+        write_text_artifacts(&md_path, &result.markdown).map_err(map_artifact_error)?;
     }
 
-    // Write SARIF if requested
+    // Write SARIF if requested.
     if let Some(sarif_path) = sarif {
-        ensure_parent_dir(&sarif_path)?;
-        fs::write(&sarif_path, &result.sarif).map_err(|e| CliError::FileWrite {
-            path: sarif_path,
-            source: e,
-        })?;
+        write_text_artifacts(&sarif_path, &result.sarif).map_err(map_artifact_error)?;
     }
 
     // Print annotations to stdout
@@ -644,14 +743,6 @@ fn run_explain(code: &str) -> Result<i32, CliError> {
     } else {
         eprintln!("Unknown code: {code}");
         Ok(1)
-    }
-}
-
-fn map_missing_behavior(behavior: covguard_config::MissingBehavior) -> MissingBehavior {
-    match behavior {
-        covguard_config::MissingBehavior::Skip => MissingBehavior::Skip,
-        covguard_config::MissingBehavior::Warn => MissingBehavior::Warn,
-        covguard_config::MissingBehavior::Fail => MissingBehavior::Fail,
     }
 }
 
@@ -723,36 +814,17 @@ fn read_diff_from_reader(
 }
 
 fn write_raw_artifacts(diff_content: &str, lcov_texts: &[String]) -> Result<(), CliError> {
-    let raw_dir = Path::new("artifacts/covguard/raw");
-    write_raw_artifacts_to(raw_dir, diff_content, lcov_texts)
+    write_raw_artifacts_from_adapter(diff_content, lcov_texts).map_err(map_artifact_error)
 }
 
+#[cfg(test)]
 fn write_raw_artifacts_to(
     raw_dir: &Path,
     diff_content: &str,
     lcov_texts: &[String],
 ) -> Result<(), CliError> {
-    if !raw_dir.exists() {
-        fs::create_dir_all(raw_dir).map_err(|e| CliError::DirCreate {
-            path: raw_dir.display().to_string(),
-            source: e,
-        })?;
-    }
-
-    let diff_path = raw_dir.join("diff.patch");
-    fs::write(&diff_path, diff_content).map_err(|e| CliError::FileWrite {
-        path: diff_path.display().to_string(),
-        source: e,
-    })?;
-
-    let combined_lcov = lcov_texts.join("\n");
-    let lcov_path = raw_dir.join("lcov.info");
-    fs::write(&lcov_path, combined_lcov).map_err(|e| CliError::FileWrite {
-        path: lcov_path.display().to_string(),
-        source: e,
-    })?;
-
-    Ok(())
+    write_raw_artifacts_to_artifacts(raw_dir, diff_content, lcov_texts)
+        .map_err(map_artifact_error)
 }
 
 /// Derive capability reasons from a `CliError` for the fallback receipt.
@@ -777,90 +849,21 @@ fn write_fallback_receipt(
     diff_reason: &str,
     coverage_reason: &str,
 ) -> Result<(), CliError> {
-    ensure_parent_dir(out_path)?;
-
-    let started_at = chrono::Utc::now();
-    let runtime_fp = compute_fingerprint(&[CODE_RUNTIME_ERROR, "covguard"]);
-
-    let report = Report {
-        schema: SENSOR_SCHEMA_ID.to_string(),
-        tool: Tool {
-            name: "covguard".to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            commit: None,
-        },
-        run: Run {
-            started_at: started_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            ended_at: Some(started_at.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-            duration_ms: Some(0),
-            capabilities: Some(Capabilities {
-                inputs: InputsCapability {
-                    diff: InputCapability {
-                        status: InputStatus::Unavailable,
-                        reason: Some(diff_reason.to_string()),
-                    },
-                    coverage: InputCapability {
-                        status: InputStatus::Unavailable,
-                        reason: Some(coverage_reason.to_string()),
-                    },
-                },
-            }),
-        },
-        verdict: Verdict {
-            status: VerdictStatus::Fail,
-            counts: VerdictCounts {
-                info: 0,
-                warn: 0,
-                error: 1,
-            },
-            reasons: vec![REASON_TOOL_ERROR.to_string()],
-        },
-        findings: vec![Finding {
-            severity: covguard_types::Severity::Error,
-            check_id: CHECK_ID_RUNTIME.to_string(),
-            code: CODE_RUNTIME_ERROR.to_string(),
-            message: format!("covguard failed due to a runtime error: {}", error_message),
-            location: None,
-            data: None,
-            fingerprint: Some(runtime_fp),
-        }],
-        data: ReportData {
-            scope: "added".to_string(),
-            threshold_pct: 0.0,
-            changed_lines_total: 0,
-            covered_lines: 0,
-            uncovered_lines: 0,
-            missing_lines: 0,
-            ignored_lines_count: 0,
-            excluded_files_count: 0,
-            diff_coverage_pct: 0.0,
-            inputs: Inputs::default(),
-            debug: None,
-            truncation: None,
-        },
-    };
-
-    let json = serde_json::to_string_pretty(&report)?;
-    fs::write(out_path, &json).map_err(|e| CliError::FileWrite {
-        path: out_path.to_string(),
-        source: e,
-    })?;
-
-    Ok(())
+    write_fallback_receipt_artifacts(out_path, error_message, diff_reason, coverage_reason)
+        .map_err(map_artifact_error)
 }
 
 /// Ensure the parent directory of a path exists
 fn ensure_parent_dir(path: &str) -> Result<(), CliError> {
-    if let Some(parent) = Path::new(path).parent()
-        && !parent.as_os_str().is_empty()
-        && !parent.exists()
-    {
-        fs::create_dir_all(parent).map_err(|e| CliError::DirCreate {
-            path: parent.display().to_string(),
-            source: e,
-        })?;
+    ensure_parent_dir_artifacts(path).map_err(map_artifact_error)
+}
+
+fn map_artifact_error(err: ArtifactWriteError) -> CliError {
+    match err {
+        ArtifactWriteError::DirCreate { path, source } => CliError::DirCreate { path, source },
+        ArtifactWriteError::FileWrite { path, source } => CliError::FileWrite { path, source },
+        ArtifactWriteError::Serialize(err) => CliError::Serialize(err),
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1027,7 +1030,7 @@ mod tests {
 
     #[test]
     fn test_cli_accepts_all_profile_values() {
-        for profile in ["oss", "moderate", "team", "strict"] {
+        for profile in ["oss", "moderate", "team", "strict", "lenient"] {
             let cli = Cli::try_parse_from([
                 "covguard",
                 "check",
@@ -1126,9 +1129,47 @@ mod tests {
             "strict",
             "--threshold",
             "90",
+            "--max-markdown-lines",
+            "7",
+            "--max-annotations",
+            "5",
+            "--max-sarif-results",
+            "3",
             "--no-ignore",
         ]);
         assert!(cli.is_ok());
+    }
+
+    #[test]
+    fn test_cli_output_limits_parsing() {
+        let cli = Cli::try_parse_from([
+            "covguard",
+            "check",
+            "--diff-file",
+            "test.patch",
+            "--lcov",
+            "coverage.info",
+            "--max-markdown-lines",
+            "9",
+            "--max-annotations",
+            "4",
+            "--max-sarif-results",
+            "8",
+        ])
+        .expect("CLI should parse");
+        match cli.command {
+            Commands::Check {
+                max_markdown_lines,
+                max_annotations,
+                max_sarif_results,
+                ..
+            } => {
+                assert_eq!(max_markdown_lines, Some(9));
+                assert_eq!(max_annotations, Some(4));
+                assert_eq!(max_sarif_results, Some(8));
+            }
+            _ => panic!("unexpected command"),
+        }
     }
 
     #[test]
@@ -1470,6 +1511,9 @@ mod tests {
                 threshold: None,
                 no_ignore: false,
                 path_strip: Vec::new(),
+                max_markdown_lines: None,
+                max_annotations: None,
+                max_sarif_results: None,
                 max_findings: None,
                 payload: None,
             },
@@ -1506,6 +1550,9 @@ mod tests {
                 threshold: None,
                 no_ignore: false,
                 path_strip: Vec::new(),
+                max_markdown_lines: None,
+                max_annotations: None,
+                max_sarif_results: None,
                 max_findings: None,
                 payload: None,
             },
@@ -1904,22 +1951,6 @@ new file mode 100644
     }
 
     #[test]
-    fn test_map_missing_behavior_variants() {
-        assert_eq!(
-            map_missing_behavior(covguard_config::MissingBehavior::Skip),
-            MissingBehavior::Skip
-        );
-        assert_eq!(
-            map_missing_behavior(covguard_config::MissingBehavior::Warn),
-            MissingBehavior::Warn
-        );
-        assert_eq!(
-            map_missing_behavior(covguard_config::MissingBehavior::Fail),
-            MissingBehavior::Fail
-        );
-    }
-
-    #[test]
     fn test_resolve_repo_root_git_and_fallback() {
         let _guard = TEST_LOCK.lock().expect("lock");
         let temp = temp_dir("covguard-cli-root");
@@ -2269,6 +2300,7 @@ new file mode 100644
             (CliProfile::Oss, "oss"),
             (CliProfile::Moderate, "moderate"),
             (CliProfile::Team, "team"),
+            (CliProfile::Lenient, "lenient"),
         ];
 
         for (profile, name) in profiles {

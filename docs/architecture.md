@@ -48,11 +48,6 @@ No dependencies on:
 - Clock
   - `now() -> DateTime`
 
-- ArtifactWriter
-  - `write_report(report)`
-  - `write_comment(text)` (optional)
-  - `write_sarif(json)` (optional)
-
 ### Adapters (outside)
 - GitDiffProvider: spawns `git diff --unified=0`
 - PatchDiffProvider: parses patch files / stdin
@@ -109,11 +104,13 @@ Truncation MUST be explicit:
 covguard-cli (entry point)
     │
     ▼
-covguard-app (orchestration)
+covguard-orchestrator (orchestration)
     ├── covguard-ports
+    ├── covguard-paths
     ├── covguard-adapters-diff
     ├── covguard-adapters-coverage
     ├── covguard-adapters-repo
+    ├── covguard-adapters-artifacts
     ├── covguard-domain ──► covguard-types
     ├── covguard-render ──► covguard-types
     └── covguard-config
@@ -129,12 +126,16 @@ covguard-app (orchestration)
 | **covguard-types** | DTOs for reports, findings, verdicts, severity. Schema IDs and error code constants. |
 | **covguard-ports** | Shared hexagonal port traits (Clock, RepoReader) used by orchestration and adapters. |
 | **covguard-domain** | Pure policy evaluation. Takes changed ranges + coverage map + policy, produces findings + verdict + metrics. No I/O. |
-| **covguard-config** | TOML configuration parsing, profile defaults (Oss/Moderate/Team/Strict), precedence resolution (CLI > file > profile > defaults). |
+| **covguard-config** | TOML configuration parsing, profile defaults (Oss/Moderate/Team/Strict/Lenient), precedence resolution (CLI > file > profile > defaults). |
+| **covguard-output** | Centralized output budgeting + renderer wrappers for markdown/annotations/SARIF interoperability. |
+| **covguard-paths** | Shared path normalization utilities used by diff and coverage adapters (`a/`/`b/` normalization, backslash + absolute path stripping). |
 | **covguard-adapters-diff** | Unified diff parsing, path normalization, range merging. Handles renames, deletions, CRLF. |
 | **covguard-adapters-coverage** | LCOV parsing, path normalization, coverage map merging (max hits). |
 | **covguard-adapters-repo** | Filesystem-backed `RepoReader` adapter for ignore directive line inspection. |
+| **covguard-adapters-artifacts** | Filesystem artifact persistence for JSON receipts, markdown/sarif, and raw repro artifacts (`artifacts/covguard/raw/*`). |
 | **covguard-render** | Renderers: Markdown (PR comments), GitHub annotations, SARIF 2.1.0. |
-| **covguard-app** | Orchestration layer. Wires adapters to domain, provides `check()` entry point, handles ignore directive detection. |
+| **covguard-orchestrator** | Orchestration layer. Wires adapters to domain, provides `check()` entry point, handles ignore directive detection. |
+| **covguard-app** | Compatibility facade re-exporting `covguard-orchestrator` |
 | **covguard-cli** | Clap-based CLI. Argument parsing, config discovery, file I/O, exit code mapping. |
 | **xtask** | Build automation: schema generation, fixture management. |
 
@@ -144,10 +145,13 @@ covguard-app (orchestration)
 - **covguard-ports**: Depends only on common primitives (chrono)
 - **covguard-domain**: Depends only on covguard-types
 - **covguard-config**: Depends on covguard-types (for Scope enum)
-- **covguard-adapters-***: Standalone parsers, no internal dependencies
+- **covguard-output**: Depends on covguard-render + covguard-types
+- **covguard-paths**: No third-party dependencies; pure normalization utilities
+- **covguard-adapters-***: Diff/coverage parsers depend on `covguard-paths` for normalization.
 - **covguard-adapters-repo**: Depends on covguard-ports
+- **covguard-adapters-artifacts**: Writes CLI-facing persistence artifacts
 - **covguard-render**: Depends on covguard-types
-- **covguard-app**: Depends on all crates except CLI
+- **covguard-orchestrator**: Depends on all crates except CLI
 - **covguard-cli**: Depends on app + config + types
 
 ### Port Traits (in covguard-ports)

@@ -14,9 +14,11 @@ Each phase lands with fixtures + schema + determinism gates.
 ## Phase 0 — Scaffold + contracts ✅
 Deliverables:
 - Workspace skeleton with microcrates:
-  - types/ports/domain/adapters-diff/adapters-coverage/adapters-repo/render/app/cli/xtask
+  - types/ports/domain/adapters-diff/adapters-coverage/adapters-repo/covguard-paths/render/app/cli/xtask
+  - output microcrate for feature-flagged renderer budgets
 - Canonical artifact writer:
   - always writes `artifacts/covguard/report.json`
+  - extracted to `covguard-adapters-artifacts` for filesystem side effects
 - Receipt DTOs aligned to envelope semantics
 - Schemas:
   - vendored `receipt.envelope.v1.json`

@@ -344,10 +344,12 @@ dependencies = [
  "assert_cmd",
  "chrono",
  "clap",
+ "covguard-adapters-artifacts",
  "covguard-adapters-diff",
  "covguard-adapters-repo",
  "covguard-app",
  "covguard-config",
+ "covguard-output-features",
  "covguard-types",
  "predicates",
  "proptest",
@@ -357,9 +359,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "covguard-adapters-artifacts"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "covguard-types",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "covguard-adapters-coverage"
 version = "0.2.0"
 dependencies = [
+ "covguard-paths",
  "covguard-ports",
  "proptest",
  "thiserror 2.0.18",
@@ -369,6 +382,7 @@ dependencies = [
 name = "covguard-adapters-diff"
 version = "0.2.0"
 dependencies = [
+ "covguard-paths",
  "covguard-ports",
  "proptest",
  "thiserror 2.0.18",
@@ -386,25 +400,24 @@ name = "covguard-app"
 version = "0.2.0"
 dependencies = [
  "chrono",
- "covguard-adapters-coverage",
- "covguard-adapters-diff",
- "covguard-config",
- "covguard-domain",
- "covguard-ports",
- "covguard-render",
+ "covguard-orchestrator",
+ "covguard-output",
+ "covguard-output-features",
+ "covguard-policy",
  "covguard-types",
  "cucumber",
  "futures",
  "insta",
  "jsonschema",
  "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "covguard-config"
 version = "0.2.0"
 dependencies = [
+ "covguard-output-features",
+ "covguard-policy",
  "glob",
  "serde",
  "thiserror 2.0.18",
@@ -419,12 +432,73 @@ dependencies = [
 ]
 
 [[package]]
+name = "covguard-directives"
+version = "0.2.0"
+dependencies = [
+ "covguard-ports",
+]
+
+[[package]]
 name = "covguard-domain"
 version = "0.2.0"
 dependencies = [
+ "covguard-directives",
+ "covguard-policy",
  "covguard-types",
  "proptest",
  "serde_json",
+]
+
+[[package]]
+name = "covguard-orchestrator"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "covguard-adapters-coverage",
+ "covguard-adapters-diff",
+ "covguard-config",
+ "covguard-directives",
+ "covguard-domain",
+ "covguard-output",
+ "covguard-output-features",
+ "covguard-policy",
+ "covguard-ports",
+ "covguard-reporting",
+ "covguard-types",
+ "futures",
+ "insta",
+ "jsonschema",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "covguard-output"
+version = "0.2.0"
+dependencies = [
+ "covguard-output-features",
+ "covguard-render",
+ "covguard-types",
+]
+
+[[package]]
+name = "covguard-output-features"
+version = "0.2.0"
+dependencies = [
+ "covguard-render",
+ "covguard-types",
+ "serde",
+]
+
+[[package]]
+name = "covguard-paths"
+version = "0.2.0"
+
+[[package]]
+name = "covguard-policy"
+version = "0.2.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -445,10 +519,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "covguard-reporting"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "covguard-domain",
+ "covguard-output",
+ "covguard-types",
+ "serde_json",
+]
+
+[[package]]
 name = "covguard-types"
 version = "0.2.0"
 dependencies = [
  "chrono",
+ "covguard-policy",
  "regex-lite",
  "serde",
  "serde_json",
