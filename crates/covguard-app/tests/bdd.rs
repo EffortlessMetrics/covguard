@@ -13,7 +13,7 @@ use covguard_output::{
     render_annotations_with_limit, render_markdown_with_limit, render_sarif_with_limit,
 };
 use covguard_output_features::OutputFeatureFlags;
-use covguard_policy::{profile_defaults, profile_from_name, Scope as PolicyScope};
+use covguard_policy::{Scope as PolicyScope, profile_defaults, profile_from_name};
 use covguard_types::{CODE_UNCOVERED_LINE, Scope, Severity, VerdictStatus};
 use cucumber::{World, given, then, when};
 
@@ -939,7 +939,12 @@ fn given_max_findings(world: &mut CovguardWorld, max: i32) {
 }
 
 #[given(expr = "output feature flags are markdown {int}, annotations {int}, and sarif {int}")]
-fn given_output_feature_flags(world: &mut CovguardWorld, markdown: i32, annotations: i32, sarif: i32) {
+fn given_output_feature_flags(
+    world: &mut CovguardWorld,
+    markdown: i32,
+    annotations: i32,
+    sarif: i32,
+) {
     world.output_flags = OutputFeatureFlags {
         max_markdown_lines: markdown as usize,
         max_annotations: annotations as usize,
@@ -1583,10 +1588,7 @@ fn then_annotations_contains(world: &mut CovguardWorld, expected: String) {
 /// Then rendering output is produced by shared output feature flags.
 #[then("the shared output feature flags are used for rendering")]
 fn then_shared_output_flags_used_for_rendering(world: &mut CovguardWorld) {
-    let result = world
-        .result
-        .as_ref()
-        .expect("check should have been run");
+    let result = world.result.as_ref().expect("check should have been run");
 
     let flags = world.output_flags;
 

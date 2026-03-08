@@ -88,7 +88,10 @@ mod tests {
         assert_eq!(normalize_coverage_path("./src/lib.rs"), "src/lib.rs");
         assert_eq!(normalize_coverage_path("././src/lib.rs"), "src/lib.rs");
         assert_eq!(normalize_coverage_path("src\\lib.rs"), "src/lib.rs");
-        assert_eq!(normalize_coverage_path("src\\sub\\lib.rs"), "src/sub/lib.rs");
+        assert_eq!(
+            normalize_coverage_path("src\\sub\\lib.rs"),
+            "src/sub/lib.rs"
+        );
         assert_eq!(
             normalize_coverage_path("/home/user/project/src/lib.rs"),
             "src/lib.rs"
@@ -99,4 +102,3 @@ mod tests {
         );
     }
 }
-

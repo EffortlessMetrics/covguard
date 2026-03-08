@@ -7,8 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::RangeInclusive;
 use std::path::Path;
 
-use covguard_ports::{DiffParseResult as PortDiffParseResult, DiffProvider};
 use covguard_paths::normalize_diff_path;
+use covguard_ports::{DiffParseResult as PortDiffParseResult, DiffProvider};
 use thiserror::Error;
 
 // ============================================================================

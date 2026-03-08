@@ -10,8 +10,8 @@ use covguard_render::{
 use covguard_types::Report;
 
 pub use covguard_output_features::{
-    DEFAULT_ANNOTATION_LIMIT, DEFAULT_MARKDOWN_LINES, DEFAULT_SARIF_RESULTS,
-    OutputFeatureConfig, OutputFeatureFlags, truncate_findings,
+    DEFAULT_ANNOTATION_LIMIT, DEFAULT_MARKDOWN_LINES, DEFAULT_SARIF_RESULTS, OutputFeatureConfig,
+    OutputFeatureFlags, truncate_findings,
 };
 
 /// Backward-compatible markdown renderer with project-wide default limit.
@@ -45,10 +45,7 @@ pub fn render_sarif_with_limit(report: &Report, max_results: usize) -> String {
 }
 
 /// Render all output formats using an explicit flag set.
-pub fn render_all(
-    report: &Report,
-    flags: &OutputFeatureFlags,
-) -> (String, String, String) {
+pub fn render_all(report: &Report, flags: &OutputFeatureFlags) -> (String, String, String) {
     (
         render_markdown_with_limit(report, flags.max_markdown_lines),
         render_annotations_with_limit(report, flags.max_annotations),

@@ -3,9 +3,9 @@
 //! This crate defines the data transfer objects used throughout covguard,
 //! including the report schema, findings, verdicts, and error codes.
 
+pub use covguard_policy::Scope;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-pub use covguard_policy::Scope;
 
 // ============================================================================
 // Schema and Code Constants
@@ -187,7 +187,7 @@ pub enum VerdictStatus {
 }
 
 /// Input availability status for capabilities block.
-/// 
+///
 /// Used to implement "No Green By Omission" - explicitly report input availability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

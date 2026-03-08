@@ -33,41 +33,35 @@ use covguard_adapters_coverage::LcovError;
 use covguard_adapters_diff::DiffError;
 use covguard_config::should_include_path;
 pub use covguard_directives::detect_ignored_lines;
-pub use covguard_policy::FailOn;
 pub use covguard_domain::MissingBehavior;
+use covguard_domain::{EvalInput, EvalOutput, Policy, evaluate};
 pub use covguard_output::{
     DEFAULT_ANNOTATION_LIMIT as DEFAULT_MAX_ANNOTATIONS,
     DEFAULT_MARKDOWN_LINES as DEFAULT_MAX_LINES,
-    DEFAULT_SARIF_RESULTS as DEFAULT_MAX_SARIF_RESULTS,
-    render_annotations,
-    render_annotations_with_limit,
-    render_markdown,
-    render_markdown_with_limit,
-    render_sarif,
+    DEFAULT_SARIF_RESULTS as DEFAULT_MAX_SARIF_RESULTS, render_annotations,
+    render_annotations_with_limit, render_markdown, render_markdown_with_limit, render_sarif,
     render_sarif_with_limit,
 };
 use covguard_output_features::OutputFeatureFlags;
-use covguard_reporting::{
-    build_debug as reporting_build_debug,
-    build_error_report_pair as reporting_build_error_report_pair,
-    build_report as reporting_build_report,
-    build_report_pair as reporting_build_report_pair,
-    build_skip_report_pair as reporting_build_skip_report_pair,
-    is_invalid_diff as reporting_is_invalid_diff,
-    ReportContext,
-};
+pub use covguard_policy::FailOn;
+pub use covguard_ports::{Clock, CoverageMap, CoverageProvider, DiffProvider, RepoReader};
 #[cfg(test)]
 use covguard_reporting::build_reasons as reporting_build_reasons;
-use covguard_domain::{EvalInput, EvalOutput, Policy, evaluate};
-pub use covguard_ports::{Clock, CoverageMap, CoverageProvider, DiffProvider, RepoReader};
-use covguard_types::{
-    CODE_INVALID_DIFF, CODE_INVALID_LCOV, Report, REASON_MISSING_LCOV, Scope, VerdictStatus,
+use covguard_reporting::{
+    ReportContext, build_debug as reporting_build_debug,
+    build_error_report_pair as reporting_build_error_report_pair,
+    build_report as reporting_build_report, build_report_pair as reporting_build_report_pair,
+    build_skip_report_pair as reporting_build_skip_report_pair,
+    is_invalid_diff as reporting_is_invalid_diff,
 };
 #[cfg(test)]
 use covguard_types::{
     CODE_COVERAGE_BELOW_THRESHOLD, CODE_RUNTIME_ERROR, Finding, InputStatus,
     REASON_BELOW_THRESHOLD, REASON_DIFF_COVERED, REASON_NO_CHANGED_LINES, REASON_SKIPPED,
     REASON_TRUNCATED, REASON_UNCOVERED_LINES, SCHEMA_ID, SENSOR_SCHEMA_ID,
+};
+use covguard_types::{
+    CODE_INVALID_DIFF, CODE_INVALID_LCOV, REASON_MISSING_LCOV, Report, Scope, VerdictStatus,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
@@ -556,10 +550,7 @@ fn build_error_result<C: Clock>(
         coverage_available,
     );
     let markdown = render_markdown_with_limit(&domain_report, request.output.max_markdown_lines);
-    let annotations = render_annotations_with_limit(
-        &domain_report,
-        request.output.max_annotations,
-    );
+    let annotations = render_annotations_with_limit(&domain_report, request.output.max_annotations);
     let sarif = render_sarif_with_limit(&domain_report, request.output.max_sarif_results);
 
     CheckResult {
@@ -613,10 +604,7 @@ fn build_skip_result<C: Clock>(
         reason,
     );
     let markdown = render_markdown_with_limit(&domain_report, request.output.max_markdown_lines);
-    let annotations = render_annotations_with_limit(
-        &domain_report,
-        request.output.max_annotations,
-    );
+    let annotations = render_annotations_with_limit(&domain_report, request.output.max_annotations);
     let sarif = render_sarif_with_limit(&domain_report, request.output.max_sarif_results);
 
     CheckResult {

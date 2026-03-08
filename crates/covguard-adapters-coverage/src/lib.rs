@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use covguard_ports::CoverageProvider;
 use covguard_paths::{normalize_coverage_path, normalize_coverage_path_with_strip};
+use covguard_ports::CoverageProvider;
 use thiserror::Error;
 
 // ============================================================================

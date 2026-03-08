@@ -72,8 +72,8 @@ pub fn detect_ignored_lines<R: RepoReader>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
     use covguard_ports::RepoReader;
+    use std::collections::BTreeMap;
 
     struct MapReader {
         lines: BTreeMap<(String, u32), String>,
@@ -151,7 +151,13 @@ mod tests {
         ]);
 
         let ignored = detect_ignored_lines(&changed_ranges, &reader);
-        assert_eq!(ignored.get("src/lib.rs").cloned(), Some(BTreeSet::from([2])));
-        assert_eq!(ignored.get("src/main.rs").cloned(), Some(BTreeSet::from([11])));
+        assert_eq!(
+            ignored.get("src/lib.rs").cloned(),
+            Some(BTreeSet::from([2]))
+        );
+        assert_eq!(
+            ignored.get("src/main.rs").cloned(),
+            Some(BTreeSet::from([11]))
+        );
     }
 }

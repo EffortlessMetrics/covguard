@@ -6,10 +6,10 @@
 //! - Profile system (oss, team, strict)
 //! - Precedence handling (CLI > config file > defaults)
 
-use serde::Deserialize;
 use covguard_output_features::{OutputFeatureConfig, OutputFeatureFlags};
-pub use covguard_policy::{FailOn, MissingBehavior, Profile, Scope};
 use covguard_policy::profile_defaults as policy_profile_defaults;
+pub use covguard_policy::{FailOn, MissingBehavior, Profile, Scope};
+use serde::Deserialize;
 use std::path::Path;
 use thiserror::Error;
 
@@ -377,7 +377,10 @@ mod tests {
         assert!(defaults.include_patterns.is_empty());
         assert!(defaults.ignore_directives);
         assert!(defaults.path_strip.is_empty());
-        assert_eq!(defaults.output.max_markdown_lines, output.max_markdown_lines);
+        assert_eq!(
+            defaults.output.max_markdown_lines,
+            output.max_markdown_lines
+        );
         assert_eq!(defaults.output.max_annotations, output.max_annotations);
         assert_eq!(defaults.output.max_sarif_results, output.max_sarif_results);
     }

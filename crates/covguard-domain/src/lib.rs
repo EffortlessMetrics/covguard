@@ -7,12 +7,12 @@
 use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 
+pub use covguard_directives::has_ignore_directive;
+pub use covguard_policy::{FailOn, MissingBehavior, Scope};
 use covguard_types::{
     CODE_COVERAGE_BELOW_THRESHOLD, CODE_MISSING_COVERAGE_FOR_FILE, CODE_UNCOVERED_LINE, Finding,
     Location, Severity, VerdictStatus, compute_fingerprint,
 };
-pub use covguard_policy::{FailOn, MissingBehavior, Scope};
-pub use covguard_directives::has_ignore_directive;
 
 // ============================================================================
 // Policy Configuration

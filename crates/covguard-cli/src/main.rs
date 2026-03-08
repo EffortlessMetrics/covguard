@@ -3,17 +3,15 @@
 //! This CLI tool checks whether changed lines in a pull request are covered by tests.
 
 use clap::{Parser, Subcommand, ValueEnum};
-use covguard_adapters_diff::{DiffError, load_diff_from_git};
-use covguard_adapters_artifacts::{
-    ensure_parent_dir as ensure_parent_dir_artifacts,
-    write_fallback_receipt as write_fallback_receipt_artifacts,
-    write_raw_artifacts as write_raw_artifacts_from_adapter,
-    write_report as write_report_artifacts,
-    write_text as write_text_artifacts,
-    ArtifactWriteError,
-};
 #[cfg(test)]
 use covguard_adapters_artifacts::write_raw_artifacts_to as write_raw_artifacts_to_artifacts;
+use covguard_adapters_artifacts::{
+    ArtifactWriteError, ensure_parent_dir as ensure_parent_dir_artifacts,
+    write_fallback_receipt as write_fallback_receipt_artifacts,
+    write_raw_artifacts as write_raw_artifacts_from_adapter,
+    write_report as write_report_artifacts, write_text as write_text_artifacts,
+};
+use covguard_adapters_diff::{DiffError, load_diff_from_git};
 use covguard_adapters_repo::FsRepoReader;
 use covguard_app::{AppError, CheckRequest, SystemClock, check_with_clock_and_reader};
 use covguard_config::{
@@ -22,9 +20,9 @@ use covguard_config::{
 use covguard_output_features::OutputFeatureConfig;
 #[cfg(test)]
 use covguard_types::CODE_UNCOVERED_LINE;
-use covguard_types::{REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Scope, explain};
 #[cfg(test)]
 use covguard_types::SENSOR_SCHEMA_ID;
+use covguard_types::{REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Scope, explain};
 use std::fs;
 #[cfg(not(test))]
 use std::io::IsTerminal;
@@ -703,7 +701,11 @@ where
         // Write domain report (full payload) to --payload or default extras path.
         let payload_path = payload.unwrap_or_else(|| {
             let out_dir = Path::new(&out).parent().unwrap_or_else(|| Path::new("."));
-            out_dir.join("extras").join("payload.json").display().to_string()
+            out_dir
+                .join("extras")
+                .join("payload.json")
+                .display()
+                .to_string()
         });
         write_report_artifacts(&payload_path, &result.report).map_err(map_artifact_error)?;
     } else {
@@ -823,8 +825,7 @@ fn write_raw_artifacts_to(
     diff_content: &str,
     lcov_texts: &[String],
 ) -> Result<(), CliError> {
-    write_raw_artifacts_to_artifacts(raw_dir, diff_content, lcov_texts)
-        .map_err(map_artifact_error)
+    write_raw_artifacts_to_artifacts(raw_dir, diff_content, lcov_texts).map_err(map_artifact_error)
 }
 
 /// Derive capability reasons from a `CliError` for the fallback receipt.

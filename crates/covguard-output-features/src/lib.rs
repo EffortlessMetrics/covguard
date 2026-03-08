@@ -60,10 +60,7 @@ pub const DEFAULT_MARKDOWN_LINES: usize = DEFAULT_MAX_LINES;
 pub const DEFAULT_SARIF_RESULTS: usize = DEFAULT_MAX_SARIF_RESULTS;
 
 /// Truncate findings with optional max cap and return truncation metadata.
-pub fn truncate_findings<T>(
-    findings: Vec<T>,
-    max: Option<usize>,
-) -> (Vec<T>, Option<Truncation>) {
+pub fn truncate_findings<T>(findings: Vec<T>, max: Option<usize>) -> (Vec<T>, Option<Truncation>) {
     if let Some(max) = max {
         let total = findings.len();
         if total > max {

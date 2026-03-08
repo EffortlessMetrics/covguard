@@ -208,7 +208,10 @@ mod tests {
     #[test]
     fn test_profile_default_behavior() {
         assert_eq!(profile_defaults(Profile::Lenient).fail_on, FailOn::Never);
-        assert_eq!(profile_defaults(Profile::Strict).max_uncovered_lines, Some(5));
+        assert_eq!(
+            profile_defaults(Profile::Strict).max_uncovered_lines,
+            Some(5)
+        );
         assert_eq!(profile_defaults(Profile::Strict).scope, Scope::Touched);
     }
 }

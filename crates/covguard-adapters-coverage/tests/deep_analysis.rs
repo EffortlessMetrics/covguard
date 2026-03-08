@@ -8,7 +8,7 @@
 //! - Error handling for malformed input
 
 use covguard_adapters_coverage::{
-    get_hits, merge_coverage, parse_lcov, parse_lcov_with_strip, LcovError, CoverageMap,
+    CoverageMap, LcovError, get_hits, merge_coverage, parse_lcov, parse_lcov_with_strip,
 };
 use std::collections::BTreeMap;
 
@@ -82,20 +82,41 @@ fn test_fixture_multiple_files_info() {
     let lib = coverage.get("src/lib.rs").unwrap();
     assert_eq!(lib.len(), 6);
     for line in 1..=6 {
-        assert_eq!(lib.get(&line), Some(&1), "src/lib.rs line {} should be covered", line);
+        assert_eq!(
+            lib.get(&line),
+            Some(&1),
+            "src/lib.rs line {} should be covered",
+            line
+        );
     }
 
     // src/calculator.rs - 11 lines, some uncovered
     let calc = coverage.get("src/calculator.rs").unwrap();
     assert_eq!(calc.len(), 11);
-    assert_eq!(calc.get(&4), Some(&0), "calculator line 4 should be uncovered");
-    assert_eq!(calc.get(&7), Some(&0), "calculator line 7 should be uncovered");
-    assert_eq!(calc.get(&8), Some(&0), "calculator line 8 should be uncovered");
+    assert_eq!(
+        calc.get(&4),
+        Some(&0),
+        "calculator line 4 should be uncovered"
+    );
+    assert_eq!(
+        calc.get(&7),
+        Some(&0),
+        "calculator line 7 should be uncovered"
+    );
+    assert_eq!(
+        calc.get(&8),
+        Some(&0),
+        "calculator line 8 should be uncovered"
+    );
 
     // src/validator.rs - 7 lines, one uncovered
     let validator = coverage.get("src/validator.rs").unwrap();
     assert_eq!(validator.len(), 7);
-    assert_eq!(validator.get(&4), Some(&0), "validator line 4 should be uncovered");
+    assert_eq!(
+        validator.get(&4),
+        Some(&0),
+        "validator line 4 should be uncovered"
+    );
 }
 
 // ============================================================================
@@ -341,10 +362,7 @@ SF:/opt/build/src/lib.rs
 DA:1,1
 end_of_record
 "#;
-    let strip_prefixes = vec![
-        "/home/runner/".to_string(),
-        "/opt/build/".to_string(),
-    ];
+    let strip_prefixes = vec!["/home/runner/".to_string(), "/opt/build/".to_string()];
     let coverage = parse_lcov_with_strip(lcov, &strip_prefixes).unwrap();
     assert!(coverage.contains_key("src/lib.rs"));
 }
@@ -417,7 +435,7 @@ fn test_merge_same_line_takes_max() {
 
     let merged = merge_coverage(vec![map1, map2]);
     let file = merged.get("src/lib.rs").unwrap();
-    assert_eq!(file.get(&1), Some(&5));  // max(0, 5)
+    assert_eq!(file.get(&1), Some(&5)); // max(0, 5)
     assert_eq!(file.get(&2), Some(&10)); // max(10, 3)
 }
 

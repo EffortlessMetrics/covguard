@@ -5,12 +5,12 @@
 
 use std::path::Path;
 
-use covguard_types::{
-    compute_fingerprint, Capabilities, Finding, InputCapability, InputStatus, Inputs, InputsCapability,
-    Report, ReportData, Run, Severity, Tool, Verdict, VerdictCounts, VerdictStatus, CHECK_ID_RUNTIME,
-    CODE_RUNTIME_ERROR,
-};
 use chrono::Utc;
+use covguard_types::{
+    CHECK_ID_RUNTIME, CODE_RUNTIME_ERROR, Capabilities, Finding, InputCapability, InputStatus,
+    Inputs, InputsCapability, Report, ReportData, Run, Severity, Tool, Verdict, VerdictCounts,
+    VerdictStatus, compute_fingerprint,
+};
 use thiserror::Error;
 
 const RAW_ARTIFACTS_DIR: &str = "artifacts/covguard/raw";
@@ -178,11 +178,7 @@ impl FsArtifactWriter {
     }
 }
 
-fn fallback_report(
-    error_message: &str,
-    diff_reason: &str,
-    coverage_reason: &str,
-) -> Report {
+fn fallback_report(error_message: &str, diff_reason: &str, coverage_reason: &str) -> Report {
     let started_at = Utc::now();
     let runtime_fp = compute_fingerprint(&[CODE_RUNTIME_ERROR, "covguard"]);
 
@@ -255,7 +251,6 @@ fn fallback_report(
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
 
     #[test]
     fn builds_fallback_receipt() {
@@ -271,19 +266,27 @@ mod tests {
 
     #[test]
     fn writes_raw_artifacts_to_explicit_dir() {
-        let dir = PathBuf::from(std::env::temp_dir()).join("covguard-adapters-artifacts-raw");
+        let dir = std::env::temp_dir().join("covguard-adapters-artifacts-raw");
         let _ = fs::remove_dir_all(&dir);
         write_raw_artifacts_to(&dir, "diff", &["lcov".to_string()]).expect("write raw");
 
-        assert_eq!(fs::read_to_string(dir.join("diff.patch")).expect("diff"), "diff");
-        assert_eq!(fs::read_to_string(dir.join("lcov.info")).expect("lcov"), "lcov");
+        assert_eq!(
+            fs::read_to_string(dir.join("diff.patch")).expect("diff"),
+            "diff"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("lcov.info")).expect("lcov"),
+            "lcov"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn ensures_parent_directory() {
-        let path = std::env::temp_dir().join("covguard-adapters-artifacts").join("a.json");
+        let path = std::env::temp_dir()
+            .join("covguard-adapters-artifacts")
+            .join("a.json");
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
         ensure_parent_dir(path.to_str().unwrap()).expect("ensure parent");
         assert!(path.parent().expect("parent").exists());
@@ -294,8 +297,13 @@ mod tests {
     fn writes_fallback_receipt() {
         let out = std::env::temp_dir().join("covguard-adapters-artifacts-receipt.json");
         let _ = fs::remove_file(&out);
-        write_fallback_receipt(out.to_str().unwrap(), "boom", "missing_diff", "missing_lcov")
-            .expect("write receipt");
+        write_fallback_receipt(
+            out.to_str().unwrap(),
+            "boom",
+            "missing_diff",
+            "missing_lcov",
+        )
+        .expect("write receipt");
         let body = fs::read_to_string(&out).expect("read");
         assert!(body.contains("\"sensor.report.v1\""));
         let _ = fs::remove_file(&out);
