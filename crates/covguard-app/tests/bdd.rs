@@ -150,6 +150,26 @@ index 0000000..1111111
     );
 }
 
+/// Given a diff with overlapping hunks in a specific file.
+#[given(expr = "a diff with overlapping hunks in {string}")]
+fn given_diff_with_overlapping_hunks(world: &mut CovguardWorld, file_path: String) {
+    world.current_file = file_path.clone();
+    world.diff_text = format!(
+        r#"diff --git a/{file} b/{file}
+index 1111111..2222222 100644
+--- a/{file}
++++ b/{file}
+@@ -0,0 +1,2 @@
++line1
++line2
+@@ -0,0 +2,2 @@
++line2_again
++line3
+"#,
+        file = file_path
+    );
+}
+
 /// Given a diff that only deletes lines from a specific file.
 #[given(expr = "a diff that only deletes lines from {string}")]
 fn given_diff_with_only_deletions(world: &mut CovguardWorld, file_path: String) {

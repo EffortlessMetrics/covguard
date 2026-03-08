@@ -7,6 +7,7 @@ members = [
     "crates/covguard-policy",
     "crates/covguard-directives",
     "crates/covguard-paths",
+    "crates/covguard-ranges",
     "crates/covguard-adapters-diff",
     "crates/covguard-adapters-coverage",
     "crates/covguard-adapters-repo",
@@ -45,6 +46,7 @@ covguard-output-features = { path = "crates/covguard-output-features", version =
 covguard-policy = { path = "crates/covguard-policy", version = "0.2.0" }
 covguard-directives = { path = "crates/covguard-directives", version = "0.2.0" }
 covguard-paths = { path = "crates/covguard-paths", version = "0.2.0" }
+covguard-ranges = { path = "crates/covguard-ranges", version = "0.2.0" }
 covguard-output = { path = "crates/covguard-output", version = "0.2.0" }
 covguard-reporting = { path = "crates/covguard-reporting", version = "0.2.0" }
 covguard-orchestrator = { path = "crates/covguard-orchestrator", version = "0.2.0" }

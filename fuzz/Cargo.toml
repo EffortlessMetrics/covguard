@@ -19,6 +19,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4.10"
 covguard-adapters-diff = { path = "../crates/covguard-adapters-diff" }
 covguard-adapters-coverage = { path = "../crates/covguard-adapters-coverage" }
+covguard-ranges = { path = "../crates/covguard-ranges" }
 arbitrary = { version = "1.4.2", features = ["derive"] }
 
 # Prevent this from interfering with workspaces
@@ -35,6 +36,13 @@ bench = false
 [[bin]]
 name = "fuzz_lcov_parser"
 path = "fuzz_targets/fuzz_lcov_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_ranges_merge"
+path = "fuzz_targets/fuzz_ranges_merge.rs"
 test = false
 doc = false
 bench = false

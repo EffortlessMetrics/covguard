@@ -384,6 +384,7 @@ version = "0.2.0"
 dependencies = [
  "covguard-paths",
  "covguard-ports",
+ "covguard-ranges",
  "proptest",
  "thiserror 2.0.18",
 ]
@@ -506,6 +507,13 @@ name = "covguard-ports"
 version = "0.2.0"
 dependencies = [
  "chrono",
+]
+
+[[package]]
+name = "covguard-ranges"
+version = "0.2.0"
+dependencies = [
+ "proptest",
 ]
 
 [[package]]

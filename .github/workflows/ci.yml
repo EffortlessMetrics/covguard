@@ -121,6 +121,9 @@ jobs:
       - name: Run fuzz_lcov_parser (smoke test)
         run: cargo +nightly fuzz run fuzz_lcov_parser --fuzz-dir fuzz -- -max_total_time=30
 
+      - name: Run fuzz_ranges_merge (smoke test)
+        run: cargo +nightly fuzz run fuzz_ranges_merge --fuzz-dir fuzz -- -max_total_time=30
+
   # Mutation testing (Linux only, timeboxed) - only on main branch
   mutants:
     name: Cargo Mutants
