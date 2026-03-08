@@ -593,7 +593,8 @@ fn test_all_fixtures_summary() {
                 continue;
             }
         };
-        let result = parse_patch_with_meta(&content).unwrap_or_else(|_| panic!("Failed to parse {}", path));
+        let result =
+            parse_patch_with_meta(&content).unwrap_or_else(|_| panic!("Failed to parse {}", path));
 
         let file_count = result.changed_ranges.len();
         let binary_count = result.binary_files.len();
