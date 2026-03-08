@@ -13,14 +13,14 @@ readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
-covguard-orchestrator = { path = "../covguard-orchestrator", version = "0.2.0" }
+covguard-orchestrator = { path = "../covguard-orchestrator", version = "0.1.0" }
 
 [dev-dependencies]
 insta = { workspace = true }
 jsonschema = "0.41.0"
 cucumber = { workspace = true }
 futures = { workspace = true }
-covguard-policy = { path = "../covguard-policy", version = "0.2.0" }
+covguard-policy = { path = "../covguard-policy", version = "0.1.0" }
 covguard-types.workspace = true
 covguard-output.workspace = true
 covguard-output-features.workspace = true

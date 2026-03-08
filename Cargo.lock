@@ -339,7 +339,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "covguard"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "chrono",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-adapters-artifacts"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "covguard-types",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-adapters-coverage"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-paths",
  "covguard-ports",
@@ -380,7 +380,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-adapters-diff"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-paths",
  "covguard-ports",
@@ -391,14 +391,14 @@ dependencies = [
 
 [[package]]
 name = "covguard-adapters-repo"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-ports",
 ]
 
 [[package]]
 name = "covguard-app"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "covguard-orchestrator",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-config"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-output-features",
  "covguard-policy",
@@ -427,21 +427,21 @@ dependencies = [
 
 [[package]]
 name = "covguard-core"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-app",
 ]
 
 [[package]]
 name = "covguard-directives"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-ports",
 ]
 
 [[package]]
 name = "covguard-domain"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-directives",
  "covguard-policy",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-orchestrator"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "covguard-adapters-coverage",
@@ -475,7 +475,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-output"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-output-features",
  "covguard-render",
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-output-features"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-render",
  "covguard-types",
@@ -493,32 +493,32 @@ dependencies = [
 
 [[package]]
 name = "covguard-paths"
-version = "0.2.0"
+version = "0.1.0"
 
 [[package]]
 name = "covguard-policy"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "covguard-ports"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
 ]
 
 [[package]]
 name = "covguard-ranges"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "covguard-render"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "covguard-types",
  "insta",
@@ -528,7 +528,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-reporting"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "covguard-domain",
@@ -539,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "covguard-types"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "covguard-policy",
@@ -3123,7 +3123,7 @@ checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",

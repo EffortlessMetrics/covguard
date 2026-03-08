@@ -13,4 +13,4 @@ readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
-covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
+covguard-ports = { path = "../covguard-ports", version = "0.1.0" }

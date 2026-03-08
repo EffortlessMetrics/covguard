@@ -13,17 +13,17 @@ readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
-covguard-types = { path = "../covguard-types", version = "0.2.0" }
-covguard-ports = { path = "../covguard-ports", version = "0.2.0" }
-covguard-domain = { path = "../covguard-domain", version = "0.2.0" }
-covguard-policy = { path = "../covguard-policy", version = "0.2.0" }
-covguard-reporting = { path = "../covguard-reporting", version = "0.2.0" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+covguard-ports = { path = "../covguard-ports", version = "0.1.0" }
+covguard-domain = { path = "../covguard-domain", version = "0.1.0" }
+covguard-policy = { path = "../covguard-policy", version = "0.1.0" }
+covguard-reporting = { path = "../covguard-reporting", version = "0.1.0" }
 covguard-directives.workspace = true
-covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.2.0" }
-covguard-adapters-coverage = { path = "../covguard-adapters-coverage", version = "0.2.0" }
-covguard-output = { path = "../covguard-output", version = "0.2.0" }
+covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.1.0" }
+covguard-adapters-coverage = { path = "../covguard-adapters-coverage", version = "0.1.0" }
+covguard-output = { path = "../covguard-output", version = "0.1.0" }
 covguard-output-features.workspace = true
-covguard-config = { path = "../covguard-config", version = "0.2.0" }
+covguard-config = { path = "../covguard-config", version = "0.1.0" }
 thiserror.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
@@ -32,4 +32,4 @@ serde_json.workspace = true
 insta = { workspace = true }
 jsonschema = "0.41.0"
 futures = { workspace = true }
-covguard-policy = { path = "../covguard-policy", version = "0.2.0" }
+covguard-policy = { path = "../covguard-policy", version = "0.1.0" }

@@ -13,8 +13,8 @@ readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
-covguard-types = { path = "../covguard-types", version = "0.2.0" }
-covguard-policy = { path = "../covguard-policy", version = "0.2.0" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+covguard-policy = { path = "../covguard-policy", version = "0.1.0" }
 covguard-directives.workspace = true
 serde_json.workspace = true
 

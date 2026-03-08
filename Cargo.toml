@@ -28,7 +28,7 @@ members = [
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 
 [workspace.package]
-version = "0.2.0"
+version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/effortlessmetrics/cov-guard"
@@ -39,19 +39,19 @@ categories = ["development-tools::testing", "command-line-utilities"]
 rust-version = "1.92"
 
 [workspace.dependencies]
-covguard-adapters-artifacts = { path = "crates/covguard-adapters-artifacts", version = "0.2.0" }
+covguard-adapters-artifacts = { path = "crates/covguard-adapters-artifacts", version = "0.1.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-covguard-output-features = { path = "crates/covguard-output-features", version = "0.2.0" }
-covguard-policy = { path = "crates/covguard-policy", version = "0.2.0" }
-covguard-directives = { path = "crates/covguard-directives", version = "0.2.0" }
-covguard-paths = { path = "crates/covguard-paths", version = "0.2.0" }
-covguard-ranges = { path = "crates/covguard-ranges", version = "0.2.0" }
-covguard-output = { path = "crates/covguard-output", version = "0.2.0" }
-covguard-reporting = { path = "crates/covguard-reporting", version = "0.2.0" }
-covguard-orchestrator = { path = "crates/covguard-orchestrator", version = "0.2.0" }
-covguard-render = { path = "crates/covguard-render", version = "0.2.0" }
-covguard-types = { path = "crates/covguard-types", version = "0.2.0" }
+covguard-output-features = { path = "crates/covguard-output-features", version = "0.1.0" }
+covguard-policy = { path = "crates/covguard-policy", version = "0.1.0" }
+covguard-directives = { path = "crates/covguard-directives", version = "0.1.0" }
+covguard-paths = { path = "crates/covguard-paths", version = "0.1.0" }
+covguard-ranges = { path = "crates/covguard-ranges", version = "0.1.0" }
+covguard-output = { path = "crates/covguard-output", version = "0.1.0" }
+covguard-reporting = { path = "crates/covguard-reporting", version = "0.1.0" }
+covguard-orchestrator = { path = "crates/covguard-orchestrator", version = "0.1.0" }
+covguard-render = { path = "crates/covguard-render", version = "0.1.0" }
+covguard-types = { path = "crates/covguard-types", version = "0.1.0" }
 toml = "0.9.8"
 thiserror = "2.0.18"
 chrono = { version = "0.4.43", features = ["serde"] }

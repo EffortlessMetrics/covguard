@@ -14,6 +14,6 @@ readme = "README.md"
 
 [dependencies]
 chrono.workspace = true
-covguard-types = { path = "../covguard-types", version = "0.2.0" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
 serde_json.workspace = true
 thiserror.workspace = true
