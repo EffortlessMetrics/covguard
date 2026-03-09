@@ -1,6 +1,5 @@
 ---
-source: crates/covguard-app/src/lib.rs
-assertion_line: 2093
+source: crates/covguard-orchestrator/src/lib.rs
 expression: report_json
 ---
 {
@@ -27,7 +26,7 @@ expression: report_json
   "schema": "covguard.report.v1",
   "tool": {
     "name": "covguard",
-    "version": "0.2.0"
+    "version": "0.1.0"
   },
   "verdict": {
     "counts": {

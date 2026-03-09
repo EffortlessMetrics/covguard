@@ -670,7 +670,10 @@ path_strip = ["/workspace/"]
         let discovered = discover_config().expect("discover config");
         std::env::set_current_dir(original_dir).expect("restore current dir");
 
-        assert_eq!(discovered.0, config_path);
+        let expected_path = std::fs::canonicalize(&config_path).expect("canonicalize expected");
+        let actual_path = std::fs::canonicalize(&discovered.0).expect("canonicalize discovered");
+
+        assert_eq!(actual_path, expected_path);
         assert_eq!(discovered.1.min_diff_coverage_pct, Some(72.0));
 
         let _ = fs::remove_dir_all(&root);

@@ -616,7 +616,7 @@ mod tests {
     fn test_optional_fields_not_serialized() {
         let tool = Tool {
             name: "covguard".to_string(),
-            version: "0.2.0".to_string(),
+            version: "0.1.0".to_string(),
             commit: None,
         };
 
@@ -645,7 +645,7 @@ mod tests {
             schema: SCHEMA_ID.to_string(),
             tool: Tool {
                 name: "covguard".to_string(),
-                version: "0.2.0".to_string(),
+                version: "0.1.0".to_string(),
                 commit: None,
             },
             run: Run {
@@ -695,7 +695,7 @@ mod tests {
         // Verify structure matches expected
         assert_eq!(json["schema"], "covguard.report.v1");
         assert_eq!(json["tool"]["name"], "covguard");
-        assert_eq!(json["tool"]["version"], "0.2.0");
+        assert_eq!(json["tool"]["version"], "0.1.0");
         assert_eq!(json["run"]["started_at"], "2026-02-02T00:00:00Z");
         assert_eq!(json["verdict"]["status"], "fail");
         assert_eq!(json["verdict"]["counts"]["error"], 3);

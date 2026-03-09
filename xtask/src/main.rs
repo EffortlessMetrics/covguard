@@ -409,7 +409,7 @@ fn generate_report_uncovered() -> Result<String> {
         schema: SCHEMA_ID.to_string(),
         tool: Tool {
             name: "covguard".to_string(),
-            version: "0.2.0".to_string(),
+            version: "0.1.0".to_string(),
             commit: None,
         },
         run: Run {
@@ -458,7 +458,7 @@ fn generate_report_covered() -> Result<String> {
         schema: SCHEMA_ID.to_string(),
         tool: Tool {
             name: "covguard".to_string(),
-            version: "0.2.0".to_string(),
+            version: "0.1.0".to_string(),
             commit: None,
         },
         run: Run {
@@ -1415,7 +1415,7 @@ fn conform_survivability(project_root: &Path, schemas_dir: &Path, update: bool) 
 // Utilities
 // ============================================================================
 
-/// Find the project root by looking for Cargo.toml with [workspace]
+/// Find the project root by looking for Cargo.toml with a `[workspace]` table.
 fn find_project_root() -> Result<PathBuf> {
     let mut current = std::env::current_dir()?;
 

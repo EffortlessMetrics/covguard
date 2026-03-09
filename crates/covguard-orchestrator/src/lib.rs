@@ -1123,7 +1123,7 @@ new file mode 100644
         let report = build_report(eval, &request, started_at, ended_at, 0, None);
 
         assert_eq!(report.tool.name, "covguard");
-        assert_eq!(report.tool.version, "0.2.0");
+        assert_eq!(report.tool.version, "0.1.0");
     }
 
     #[test]

@@ -69,7 +69,7 @@ fn status_label(status: &VerdictStatus) -> &'static str {
 ///
 /// # Example Output
 ///
-/// ```markdown
+/// ````markdown
 /// ## covguard: Diff Coverage Report
 ///
 /// **Status**: [emoji] [status]
@@ -95,8 +95,8 @@ fn status_label(status: &VerdictStatus) -> &'static str {
 /// covguard check --diff-file <file> --lcov <lcov>
 /// ```
 ///
-/// </details>
-/// ```
+/// `</details>`
+/// ````
 pub fn render_markdown(report: &Report, max_lines: usize) -> String {
     let mut output = String::new();
 

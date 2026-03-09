@@ -93,7 +93,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run property tests
-        run: cargo test --workspace proptest
+        run: cargo test --workspace --lib --bins proptests::
 
   # Fuzz testing smoke test (Linux only, requires nightly)
   fuzz-smoke:
