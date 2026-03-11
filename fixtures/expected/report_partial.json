@@ -2,7 +2,7 @@
   "schema": "covguard.report.v1",
   "tool": {
     "name": "covguard",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "run": {
     "started_at": "2026-02-02T00:00:00Z"

@@ -3,6 +3,7 @@
 //! This crate defines the data transfer objects used throughout covguard,
 //! including the report schema, findings, verdicts, and error codes.
 
+pub use covguard_policy::Scope;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -183,17 +184,6 @@ pub enum VerdictStatus {
     Warn,
     Fail,
     Skip,
-}
-
-/// Scope of lines to evaluate.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Scope {
-    /// Only evaluate added lines.
-    #[default]
-    Added,
-    /// Evaluate all touched (added + modified) lines.
-    Touched,
 }
 
 /// Input availability status for capabilities block.
@@ -520,6 +510,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_compute_fingerprint_known_values() {
+        assert_eq!(
+            compute_fingerprint(&["a", "b"]),
+            "0eab8a0a3380abf4c7d1fb0b43b66aafbb64a4b953e4eb2dccca579461912d0c"
+        );
+        assert_eq!(
+            compute_fingerprint(&[]),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn test_explain_returns_code_info() {
+        let info = explain(CODE_UNCOVERED_LINE).expect("code should exist");
+        assert_eq!(info.code, CODE_UNCOVERED_LINE);
+        assert_eq!(info.name, "UncoveredLine");
+        assert!(explain("covguard.missing.code").is_none());
+    }
+
+    #[test]
     fn test_severity_serialization() {
         assert_eq!(serde_json::to_string(&Severity::Info).unwrap(), "\"info\"");
         assert_eq!(serde_json::to_string(&Severity::Warn).unwrap(), "\"warn\"");
@@ -606,7 +616,7 @@ mod tests {
     fn test_optional_fields_not_serialized() {
         let tool = Tool {
             name: "covguard".to_string(),
-            version: "0.2.0".to_string(),
+            version: "0.1.0".to_string(),
             commit: None,
         };
 
@@ -635,7 +645,7 @@ mod tests {
             schema: SCHEMA_ID.to_string(),
             tool: Tool {
                 name: "covguard".to_string(),
-                version: "0.2.0".to_string(),
+                version: "0.1.0".to_string(),
                 commit: None,
             },
             run: Run {
@@ -685,7 +695,7 @@ mod tests {
         // Verify structure matches expected
         assert_eq!(json["schema"], "covguard.report.v1");
         assert_eq!(json["tool"]["name"], "covguard");
-        assert_eq!(json["tool"]["version"], "0.2.0");
+        assert_eq!(json["tool"]["version"], "0.1.0");
         assert_eq!(json["run"]["started_at"], "2026-02-02T00:00:00Z");
         assert_eq!(json["verdict"]["status"], "fail");
         assert_eq!(json["verdict"]["counts"]["error"], 3);
@@ -1191,17 +1201,20 @@ mod tests {
         codes.extend(scan_dir(&root, "fixtures/expected"));
         codes.extend(scan_dir(&root, "crates/covguard-render/src/snapshots"));
         codes.extend(scan_dir(&root, "crates/covguard-app/src/snapshots"));
+        let temp_root = std::env::temp_dir().join(format!("covguard-types-{}", std::process::id()));
+        let nested_dir = temp_root.join("nested").join("inner");
+        fs::create_dir_all(&nested_dir).expect("create temp nested dir");
+        fs::write(nested_dir.join("codes.txt"), "covguard.diff.uncovered_line")
+            .expect("write temp codes file");
+        codes.extend(scan_dir(&temp_root, "nested"));
+        let _ = fs::remove_dir_all(&temp_root);
 
         // Filter out schema ID which isn't an error code
         codes.remove(SCHEMA_ID);
 
         let registry: BTreeSet<&'static str> = CODE_REGISTRY.iter().map(|c| c.code).collect();
         for code in codes {
-            assert!(
-                registry.contains(code.as_str()),
-                "code '{}' not found in registry",
-                code
-            );
+            assert!(registry.contains(code.as_str()));
         }
     }
 
@@ -1441,11 +1454,7 @@ mod tests {
             REASON_TRUNCATED,
         ];
         for reason in &reasons {
-            assert!(
-                reason_re.is_match(reason),
-                "REASON token '{}' does not match ^[a-z0-9_]+$",
-                reason
-            );
+            assert!(reason_re.is_match(reason));
         }
     }
 
@@ -1461,11 +1470,7 @@ mod tests {
             CODE_RUNTIME_ERROR,
         ];
         for code in &codes {
-            assert!(
-                code_re.is_match(code),
-                "CODE constant '{}' does not match ^[a-z0-9_.]+$",
-                code
-            );
+            assert!(code_re.is_match(code));
         }
     }
 
@@ -1473,11 +1478,7 @@ mod tests {
     fn test_code_registry_entries_have_valid_codes() {
         let code_re = regex_lite::Regex::new(r"^[a-z0-9_.]+$").unwrap();
         for entry in CODE_REGISTRY {
-            assert!(
-                code_re.is_match(entry.code),
-                "CODE_REGISTRY entry '{}' does not match ^[a-z0-9_.]+$",
-                entry.code
-            );
+            assert!(code_re.is_match(entry.code));
         }
     }
 }

@@ -11,6 +11,7 @@ cargo test
 # Specific crate tests
 cargo test --package covguard-domain
 cargo test --package covguard-app
+cargo test --package covguard
 cargo test --package covguard-adapters-diff
 cargo test --package covguard-adapters-coverage
 
@@ -34,7 +35,11 @@ cd fuzz && cargo +nightly fuzz run fuzz_diff_parser
 | covguard-adapters-diff | Unit + Property tests | `crates/covguard-adapters-diff/src/lib.rs` |
 | covguard-adapters-coverage | Unit + Property tests | `crates/covguard-adapters-coverage/src/lib.rs` |
 | covguard-render | Unit + Snapshot tests | `crates/covguard-render/src/lib.rs` |
-| covguard-app | Integration + Snapshot tests | `crates/covguard-app/src/lib.rs`, `crates/covguard-app/tests/` |
+| covguard-output | Unit + Snapshot tests | `crates/covguard-output/src/lib.rs` |
+| covguard-app | Integration tests (BDD + schema) + compatibility facade | `crates/covguard-app/tests/` |
+| covguard-orchestrator | Unit + snapshot tests | `crates/covguard-orchestrator/src/lib.rs` |
+| covguard-core | Compatibility facade (re-export only, no dedicated test suite) | `crates/covguard-core/src/lib.rs` |
+| covguard | CLI unit + integration tests | `crates/covguard-cli/src/main.rs`, `crates/covguard-cli/tests/integration.rs` |
 
 ## Mutation Testing with cargo-mutants
 
@@ -148,7 +153,8 @@ cargo +nightly fuzz run fuzz_diff_parser -- -max_total_time=300
 Snapshot tests use the `insta` crate for output stability:
 
 - **covguard-render**: `crates/covguard-render/src/snapshots/`
-- **covguard-app**: `crates/covguard-app/src/snapshots/`
+- **covguard-orchestrator**: `crates/covguard-orchestrator/src/snapshots/`  
+  (legacy snapshots were migrated from façade-era fixture ownership)
 
 Update snapshots with:
 ```bash
@@ -177,7 +183,21 @@ fixtures/
     └── ...
 ```
 
-### BDD Tests (Cucumber) — Planned
+### Secrets-Shaped Fixtures
+
+This repository does not commit PEM, JWK, or certificate fixtures. If a test
+needs secret-shaped content, generate it at runtime with `uselesskey` from a
+deterministic seed instead of checking cryptographic material into git.
+
+The reference example lives in
+`crates/covguard-cli/tests/generated_crypto_fixtures.rs`. It generates a stable
+RSA private key, embeds it into a synthetic diff, and proves `covguard` can
+process PEM-like content without relying on committed key files.
+
+Use `module_path!()` or another stable test identifier as the seed input so the
+fixture remains reproducible across local runs and CI.
+
+### BDD Tests (Cucumber)
 
 End-to-end scenarios in `bdd/features/`. Tests the full pipeline from
 diff + LCOV input to JSON/Markdown output.

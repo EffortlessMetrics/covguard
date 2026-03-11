@@ -1,15 +1,21 @@
 [package]
 name = "covguard-domain"
-description = "Pure domain logic for covguard diff coverage policy evaluation"
+description = "Pure policy evaluation engine for diff-scoped coverage decisions"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-domain"
+keywords = ["coverage", "diff", "policy", "testing", "quality"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
-covguard-types = { path = "../covguard-types" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+covguard-policy = { path = "../covguard-policy", version = "0.1.0" }
+covguard-directives.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

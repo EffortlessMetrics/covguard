@@ -1,0 +1,18 @@
+[package]
+name = "covguard-output-features"
+description = "Shared output feature-flag contracts for covguard renderers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-output-features"
+keywords = ["coverage", "render", "testing", "reporting", "configuration"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+covguard-render.workspace = true
+covguard-types.workspace = true

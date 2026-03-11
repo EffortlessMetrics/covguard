@@ -1,0 +1,16 @@
+[package]
+name = "covguard-directives"
+description = "Directive parsing and directive-range helpers for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["coverage", "directives", "testing", "quality"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+covguard-ports = { path = "../covguard-ports", version = "0.1.0" }
+

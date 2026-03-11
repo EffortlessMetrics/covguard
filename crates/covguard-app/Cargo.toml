@@ -1,0 +1,32 @@
+[package]
+name = "covguard-app"
+description = "Compatibility facade over covguard-orchestrator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-app"
+keywords = ["orchestration", "coverage", "diff", "testing", "ci"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+covguard-orchestrator = { path = "../covguard-orchestrator", version = "0.1.0" }
+
+[dev-dependencies]
+insta = { workspace = true }
+jsonschema = "0.41.0"
+cucumber = { workspace = true }
+futures = { workspace = true }
+covguard-policy = { path = "../covguard-policy", version = "0.1.0" }
+covguard-types.workspace = true
+covguard-output.workspace = true
+covguard-output-features.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[[test]]
+name = "bdd"
+harness = false

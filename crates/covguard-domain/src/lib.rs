@@ -7,6 +7,8 @@
 use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 
+pub use covguard_directives::has_ignore_directive;
+pub use covguard_policy::{FailOn, MissingBehavior, Scope};
 use covguard_types::{
     CODE_COVERAGE_BELOW_THRESHOLD, CODE_MISSING_COVERAGE_FOR_FILE, CODE_UNCOVERED_LINE, Finding,
     Location, Severity, VerdictStatus, compute_fingerprint,
@@ -15,50 +17,6 @@ use covguard_types::{
 // ============================================================================
 // Policy Configuration
 // ============================================================================
-
-/// Determines when the evaluation should fail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FailOn {
-    /// Fail if there are any error-level findings.
-    #[default]
-    Error,
-    /// Fail if there are any warn-level or error-level findings.
-    Warn,
-    /// Never fail (always pass unless there's a runtime error).
-    Never,
-}
-
-/// How to handle missing coverage data.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MissingBehavior {
-    /// Skip missing coverage (do not count toward percentage, no findings).
-    Skip,
-    /// Warn on missing coverage.
-    #[default]
-    Warn,
-    /// Fail on missing coverage.
-    Fail,
-}
-
-/// Scope of lines to evaluate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Scope {
-    /// Only evaluate added lines.
-    #[default]
-    Added,
-    /// Evaluate all touched (added + modified) lines.
-    Touched,
-}
-
-impl Scope {
-    /// Convert to string representation.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Scope::Added => "added",
-            Scope::Touched => "touched",
-        }
-    }
-}
 
 /// Policy configuration for coverage evaluation.
 #[derive(Debug, Clone)]
@@ -243,12 +201,12 @@ pub fn evaluate(input: EvalInput) -> EvalOutput {
     }
 
     // Missing file findings (file-level)
-    if input.policy.missing_file != MissingBehavior::Skip {
-        let severity = match input.policy.missing_file {
-            MissingBehavior::Warn => Severity::Warn,
-            MissingBehavior::Fail => Severity::Error,
-            MissingBehavior::Skip => Severity::Info,
-        };
+    let missing_file_severity = match input.policy.missing_file {
+        MissingBehavior::Skip => None,
+        MissingBehavior::Warn => Some(Severity::Warn),
+        MissingBehavior::Fail => Some(Severity::Error),
+    };
+    if let Some(severity) = missing_file_severity {
         for (path, count) in &missing_files {
             let fp = compute_fingerprint(&[CODE_MISSING_COVERAGE_FOR_FILE, path]);
             findings.push(Finding {
@@ -403,55 +361,6 @@ fn determine_verdict(findings: &[Finding], policy: &Policy) -> VerdictStatus {
 }
 
 // ============================================================================
-// Ignore Directive Detection
-// ============================================================================
-
-/// Check if a line contains a `covguard: ignore` directive.
-///
-/// The directive can appear in any comment style:
-/// - `// covguard: ignore` (Rust, C, JS, etc.)
-/// - `# covguard: ignore` (Python, Shell, YAML, etc.)
-/// - `-- covguard: ignore` (SQL, Haskell, Lua)
-/// - `/* covguard: ignore */` (block comments)
-///
-/// Matching is case-insensitive and tolerant of whitespace.
-///
-/// # Examples
-///
-/// ```
-/// use covguard_domain::has_ignore_directive;
-///
-/// assert!(has_ignore_directive("let x = 1; // covguard: ignore"));
-/// assert!(has_ignore_directive("# covguard:ignore"));
-/// assert!(has_ignore_directive("/* COVGUARD: IGNORE */"));
-/// assert!(!has_ignore_directive("let x = 1;"));
-/// ```
-pub fn has_ignore_directive(line: &str) -> bool {
-    let line_lower = line.to_lowercase();
-
-    // Look for "covguard:" followed by optional whitespace and "ignore"
-    // This handles various comment styles automatically since we just
-    // search for the directive pattern anywhere in the line
-    if let Some(pos) = line_lower.find("covguard:") {
-        let after = &line_lower[pos + 9..]; // len("covguard:") = 9
-        let trimmed = after.trim_start();
-        return trimmed.starts_with("ignore");
-    }
-
-    // Also support "covguard-ignore" syntax (hyphen instead of colon)
-    if let Some(pos) = line_lower.find("covguard-ignore") {
-        // Make sure it's in a comment context (has a comment marker before it)
-        let before = &line_lower[..pos];
-        return before.contains("//")
-            || before.contains('#')
-            || before.contains("--")
-            || before.contains("/*");
-    }
-
-    false
-}
-
-// ============================================================================
 // Tests
 // ============================================================================
 
@@ -500,6 +409,12 @@ mod tests {
     }
 
     #[test]
+    fn test_scope_as_str() {
+        assert_eq!(Scope::Added.as_str(), "added");
+        assert_eq!(Scope::Touched.as_str(), "touched");
+    }
+
+    #[test]
     fn test_all_lines_covered_pass() {
         let input = make_input(
             vec![("src/lib.rs", vec![1..=3])],
@@ -514,8 +429,7 @@ mod tests {
             !output
                 .findings
                 .iter()
-                .any(|f| f.code == CODE_UNCOVERED_LINE),
-            "Should have no uncovered line findings"
+                .any(|f| f.code == CODE_UNCOVERED_LINE)
         );
         assert_eq!(output.metrics.covered_lines, 3);
         assert_eq!(output.metrics.uncovered_lines, 0);
@@ -599,6 +513,37 @@ mod tests {
                 .iter()
                 .any(|f| f.code == CODE_MISSING_COVERAGE_FOR_FILE)
         );
+    }
+
+    #[test]
+    fn test_missing_line_within_file_counts_as_missing() {
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=2])],
+            vec![("src/lib.rs", vec![(1, 1)])],
+        );
+        input.policy.missing_coverage = MissingBehavior::Warn;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.metrics.covered_lines, 1);
+        assert_eq!(output.metrics.uncovered_lines, 0);
+        assert_eq!(output.metrics.missing_lines, 1);
+        assert_eq!(output.metrics.diff_coverage_pct, 50.0);
+    }
+
+    #[test]
+    fn test_missing_file_fail_severity_error() {
+        let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
+        input.policy.missing_file = MissingBehavior::Fail;
+
+        let output = evaluate(input);
+
+        let missing = output
+            .findings
+            .iter()
+            .find(|f| f.code == CODE_MISSING_COVERAGE_FOR_FILE)
+            .expect("missing file finding");
+        assert_eq!(missing.severity, Severity::Error);
     }
 
     #[test]
@@ -736,6 +681,59 @@ mod tests {
     }
 
     #[test]
+    fn test_sort_findings_tiebreakers() {
+        fn make_finding(
+            path: &str,
+            line: u32,
+            check_id: &str,
+            code: &str,
+            message: &str,
+        ) -> Finding {
+            Finding {
+                severity: Severity::Error,
+                check_id: check_id.to_string(),
+                code: code.to_string(),
+                message: message.to_string(),
+                location: Some(Location {
+                    path: path.to_string(),
+                    line: Some(line),
+                    col: None,
+                }),
+                data: None,
+                fingerprint: None,
+            }
+        }
+
+        let mut by_line = vec![
+            make_finding("src/lib.rs", 2, "a", "code.a", "m1"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "m1"),
+        ];
+        sort_findings(&mut by_line);
+        assert_eq!(by_line[0].location.as_ref().unwrap().line, Some(1));
+
+        let mut by_check = vec![
+            make_finding("src/lib.rs", 1, "b", "code.a", "m1"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "m1"),
+        ];
+        sort_findings(&mut by_check);
+        assert_eq!(by_check[0].check_id, "a");
+
+        let mut by_code = vec![
+            make_finding("src/lib.rs", 1, "a", "code.b", "m1"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "m1"),
+        ];
+        sort_findings(&mut by_code);
+        assert_eq!(by_code[0].code, "code.a");
+
+        let mut by_message = vec![
+            make_finding("src/lib.rs", 1, "a", "code.a", "b"),
+            make_finding("src/lib.rs", 1, "a", "code.a", "a"),
+        ];
+        sort_findings(&mut by_message);
+        assert_eq!(by_message[0].message, "a");
+    }
+
+    #[test]
     fn test_fail_on_never() {
         let mut input = make_input(
             vec![("src/lib.rs", vec![1..=1])],
@@ -746,6 +744,39 @@ mod tests {
         let output = evaluate(input);
 
         // Even with errors, verdict should be warn (not fail)
+        assert_eq!(output.verdict, VerdictStatus::Warn);
+    }
+
+    #[test]
+    fn test_fail_on_never_passes_without_findings() {
+        let mut input = make_input(vec![], vec![]);
+        input.policy.fail_on = FailOn::Never;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.verdict, VerdictStatus::Pass);
+    }
+
+    #[test]
+    fn test_fail_on_warn_fails_on_warnings() {
+        let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
+        input.policy.fail_on = FailOn::Warn;
+        input.policy.missing_file = MissingBehavior::Warn;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.verdict, VerdictStatus::Fail);
+    }
+
+    #[test]
+    fn test_fail_on_error_warns_on_only_warnings() {
+        let mut input = make_input(vec![("src/new.rs", vec![1..=1])], vec![]);
+        input.policy.fail_on = FailOn::Error;
+        input.policy.missing_file = MissingBehavior::Warn;
+        input.policy.threshold_pct = 0.0;
+
+        let output = evaluate(input);
+
         assert_eq!(output.verdict, VerdictStatus::Warn);
     }
 
@@ -825,52 +856,6 @@ mod tests {
         assert_eq!(output.metrics.uncovered_lines, 3);
     }
 
-    // ========================================================================
-    // Ignore Directive Tests
-    // ========================================================================
-
-    #[test]
-    fn test_has_ignore_directive_rust_comment() {
-        assert!(has_ignore_directive("let x = 1; // covguard: ignore"));
-        assert!(has_ignore_directive("// covguard: ignore"));
-        assert!(has_ignore_directive("    // covguard: ignore"));
-        assert!(has_ignore_directive("// COVGUARD: IGNORE"));
-        assert!(has_ignore_directive("// covguard:ignore")); // no space after colon
-    }
-
-    #[test]
-    fn test_has_ignore_directive_python_comment() {
-        assert!(has_ignore_directive("x = 1  # covguard: ignore"));
-        assert!(has_ignore_directive("# covguard: ignore"));
-        assert!(has_ignore_directive("#covguard:ignore"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_block_comment() {
-        assert!(has_ignore_directive("/* covguard: ignore */"));
-        assert!(has_ignore_directive("int x = 1; /* covguard: ignore */"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_sql_comment() {
-        assert!(has_ignore_directive("-- covguard: ignore"));
-        assert!(has_ignore_directive("SELECT 1; -- covguard: ignore"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_hyphen_syntax() {
-        assert!(has_ignore_directive("// covguard-ignore"));
-        assert!(has_ignore_directive("# covguard-ignore"));
-    }
-
-    #[test]
-    fn test_has_ignore_directive_negative_cases() {
-        assert!(!has_ignore_directive("let x = 1;"));
-        assert!(!has_ignore_directive("// some other comment"));
-        assert!(!has_ignore_directive("// covguard")); // missing ignore
-        assert!(!has_ignore_directive("// ignore covguard")); // wrong order
-    }
-
     #[test]
     fn test_ignored_lines_skipped() {
         let input = make_input_with_ignored(
@@ -938,6 +923,160 @@ mod tests {
         assert_eq!(output.metrics.uncovered_lines, 0);
         assert_eq!(output.metrics.ignored_lines, 1);
         assert_eq!(output.metrics.diff_coverage_pct, 100.0);
+    }
+
+    #[test]
+    fn test_threshold_exactly_at_boundary() {
+        // Test when coverage is exactly at threshold (80%)
+        // Note: Even at exactly 80%, uncovered lines still generate error findings
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=5])],
+            vec![("src/lib.rs", vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 0)])], // 4/5 = 80%
+        );
+        input.policy.threshold_pct = 80.0;
+
+        let output = evaluate(input);
+
+        // Coverage is exactly at threshold, so no "below threshold" finding
+        // But there's still an uncovered line which generates an error finding
+        assert_eq!(output.verdict, VerdictStatus::Fail); // Fail due to uncovered line error
+        assert_eq!(output.metrics.diff_coverage_pct, 80.0);
+        // Should NOT have a "below threshold" finding, only uncovered line finding
+        assert_eq!(output.findings.len(), 1);
+        assert_eq!(output.findings[0].code, CODE_UNCOVERED_LINE);
+    }
+
+    #[test]
+    fn test_threshold_slightly_below_boundary() {
+        // Test when coverage is just below threshold (79.9% vs 80%)
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=10])],
+            vec![(
+                "src/lib.rs",
+                vec![
+                    (1, 1),
+                    (2, 1),
+                    (3, 1),
+                    (4, 1),
+                    (5, 1),
+                    (6, 1),
+                    (7, 1),
+                    (8, 0),
+                    (9, 0),
+                    (10, 0),
+                ],
+            )], // 7/10 = 70%
+        );
+        input.policy.threshold_pct = 80.0;
+
+        let output = evaluate(input);
+
+        // Below threshold should fail
+        assert_eq!(output.verdict, VerdictStatus::Fail);
+        assert!(output.metrics.diff_coverage_pct < 80.0);
+    }
+
+    #[test]
+    fn test_large_line_numbers() {
+        // Test with large line numbers to ensure no overflow
+        let input = make_input(
+            vec![("src/lib.rs", vec![1000000..=1000002])],
+            vec![("src/lib.rs", vec![(1000000, 1), (1000001, 0), (1000002, 1)])],
+        );
+
+        let output = evaluate(input);
+
+        assert_eq!(output.metrics.changed_lines_total, 3);
+        assert_eq!(output.metrics.covered_lines, 2);
+        assert_eq!(output.metrics.uncovered_lines, 1);
+    }
+
+    #[test]
+    fn test_empty_file_path() {
+        // Test with empty file path (edge case)
+        // Note: Empty paths may generate additional findings (e.g., missing file)
+        let input = make_input(vec![("", vec![1..=1])], vec![("", vec![(1, 0)])]);
+
+        let output = evaluate(input);
+
+        // Should still work with empty path - uncovered line is detected
+        assert_eq!(output.metrics.uncovered_lines, 1);
+        // There may be multiple findings (uncovered line + potentially missing file)
+        assert!(!output.findings.is_empty());
+    }
+
+    #[test]
+    fn test_unicode_in_path() {
+        // Test with unicode characters in path
+        let unicode_path = "src/日本語/файл.rs";
+        let input = make_input(
+            vec![(unicode_path, vec![1..=1])],
+            vec![(unicode_path, vec![(1, 0)])],
+        );
+
+        let output = evaluate(input);
+
+        // Verify the metrics are correct
+        assert_eq!(output.metrics.uncovered_lines, 1);
+        assert_eq!(output.metrics.changed_lines_total, 1);
+        // Verify findings exist
+        assert!(
+            !output.findings.is_empty(),
+            "Should have findings for uncovered line"
+        );
+        // Verify the finding has the correct path if location exists
+        if let Some(finding) = output.findings.first() {
+            if let Some(loc) = &finding.location {
+                assert_eq!(loc.path, unicode_path);
+            }
+        }
+    }
+
+    #[test]
+    fn test_zero_threshold() {
+        // Test with zero threshold (always pass)
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=3])],
+            vec![("src/lib.rs", vec![(1, 0), (2, 0), (3, 0)])], // All uncovered
+        );
+        input.policy.threshold_pct = 0.0;
+
+        let output = evaluate(input);
+
+        // Should pass with 0% threshold even though all lines uncovered
+        // (but still fail due to uncovered lines being errors)
+        assert_eq!(output.verdict, VerdictStatus::Fail); // Still fails due to error-level findings
+    }
+
+    #[test]
+    fn test_100_percent_threshold_all_covered() {
+        // Test with 100% threshold and all lines covered
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=3])],
+            vec![("src/lib.rs", vec![(1, 1), (2, 1), (3, 1)])], // All covered
+        );
+        input.policy.threshold_pct = 100.0;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.verdict, VerdictStatus::Pass);
+        assert_eq!(output.metrics.diff_coverage_pct, 100.0);
+    }
+
+    #[test]
+    fn test_single_line_coverage() {
+        // Test with single line file
+        let input = make_input(
+            vec![("src/lib.rs", vec![1..=1])],
+            vec![("src/lib.rs", vec![(1, 5)])], // 5 hits
+        );
+
+        let output = evaluate(input);
+
+        assert_eq!(output.metrics.changed_lines_total, 1);
+        assert_eq!(output.metrics.covered_lines, 1);
+        assert_eq!(output.metrics.diff_coverage_pct, 100.0);
+        assert!(output.findings.is_empty());
     }
 }
 
