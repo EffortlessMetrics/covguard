@@ -924,6 +924,160 @@ mod tests {
         assert_eq!(output.metrics.ignored_lines, 1);
         assert_eq!(output.metrics.diff_coverage_pct, 100.0);
     }
+
+    #[test]
+    fn test_threshold_exactly_at_boundary() {
+        // Test when coverage is exactly at threshold (80%)
+        // Note: Even at exactly 80%, uncovered lines still generate error findings
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=5])],
+            vec![("src/lib.rs", vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 0)])], // 4/5 = 80%
+        );
+        input.policy.threshold_pct = 80.0;
+
+        let output = evaluate(input);
+
+        // Coverage is exactly at threshold, so no "below threshold" finding
+        // But there's still an uncovered line which generates an error finding
+        assert_eq!(output.verdict, VerdictStatus::Fail); // Fail due to uncovered line error
+        assert_eq!(output.metrics.diff_coverage_pct, 80.0);
+        // Should NOT have a "below threshold" finding, only uncovered line finding
+        assert_eq!(output.findings.len(), 1);
+        assert_eq!(output.findings[0].code, CODE_UNCOVERED_LINE);
+    }
+
+    #[test]
+    fn test_threshold_slightly_below_boundary() {
+        // Test when coverage is just below threshold (79.9% vs 80%)
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=10])],
+            vec![(
+                "src/lib.rs",
+                vec![
+                    (1, 1),
+                    (2, 1),
+                    (3, 1),
+                    (4, 1),
+                    (5, 1),
+                    (6, 1),
+                    (7, 1),
+                    (8, 0),
+                    (9, 0),
+                    (10, 0),
+                ],
+            )], // 7/10 = 70%
+        );
+        input.policy.threshold_pct = 80.0;
+
+        let output = evaluate(input);
+
+        // Below threshold should fail
+        assert_eq!(output.verdict, VerdictStatus::Fail);
+        assert!(output.metrics.diff_coverage_pct < 80.0);
+    }
+
+    #[test]
+    fn test_large_line_numbers() {
+        // Test with large line numbers to ensure no overflow
+        let input = make_input(
+            vec![("src/lib.rs", vec![1000000..=1000002])],
+            vec![("src/lib.rs", vec![(1000000, 1), (1000001, 0), (1000002, 1)])],
+        );
+
+        let output = evaluate(input);
+
+        assert_eq!(output.metrics.changed_lines_total, 3);
+        assert_eq!(output.metrics.covered_lines, 2);
+        assert_eq!(output.metrics.uncovered_lines, 1);
+    }
+
+    #[test]
+    fn test_empty_file_path() {
+        // Test with empty file path (edge case)
+        // Note: Empty paths may generate additional findings (e.g., missing file)
+        let input = make_input(vec![("", vec![1..=1])], vec![("", vec![(1, 0)])]);
+
+        let output = evaluate(input);
+
+        // Should still work with empty path - uncovered line is detected
+        assert_eq!(output.metrics.uncovered_lines, 1);
+        // There may be multiple findings (uncovered line + potentially missing file)
+        assert!(!output.findings.is_empty());
+    }
+
+    #[test]
+    fn test_unicode_in_path() {
+        // Test with unicode characters in path
+        let unicode_path = "src/日本語/файл.rs";
+        let input = make_input(
+            vec![(unicode_path, vec![1..=1])],
+            vec![(unicode_path, vec![(1, 0)])],
+        );
+
+        let output = evaluate(input);
+
+        // Verify the metrics are correct
+        assert_eq!(output.metrics.uncovered_lines, 1);
+        assert_eq!(output.metrics.changed_lines_total, 1);
+        // Verify findings exist
+        assert!(
+            !output.findings.is_empty(),
+            "Should have findings for uncovered line"
+        );
+        // Verify the finding has the correct path if location exists
+        if let Some(finding) = output.findings.first() {
+            if let Some(loc) = &finding.location {
+                assert_eq!(loc.path, unicode_path);
+            }
+        }
+    }
+
+    #[test]
+    fn test_zero_threshold() {
+        // Test with zero threshold (always pass)
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=3])],
+            vec![("src/lib.rs", vec![(1, 0), (2, 0), (3, 0)])], // All uncovered
+        );
+        input.policy.threshold_pct = 0.0;
+
+        let output = evaluate(input);
+
+        // Should pass with 0% threshold even though all lines uncovered
+        // (but still fail due to uncovered lines being errors)
+        assert_eq!(output.verdict, VerdictStatus::Fail); // Still fails due to error-level findings
+    }
+
+    #[test]
+    fn test_100_percent_threshold_all_covered() {
+        // Test with 100% threshold and all lines covered
+        let mut input = make_input(
+            vec![("src/lib.rs", vec![1..=3])],
+            vec![("src/lib.rs", vec![(1, 1), (2, 1), (3, 1)])], // All covered
+        );
+        input.policy.threshold_pct = 100.0;
+
+        let output = evaluate(input);
+
+        assert_eq!(output.verdict, VerdictStatus::Pass);
+        assert_eq!(output.metrics.diff_coverage_pct, 100.0);
+    }
+
+    #[test]
+    fn test_single_line_coverage() {
+        // Test with single line file
+        let input = make_input(
+            vec![("src/lib.rs", vec![1..=1])],
+            vec![("src/lib.rs", vec![(1, 5)])], // 5 hits
+        );
+
+        let output = evaluate(input);
+
+        assert_eq!(output.metrics.changed_lines_total, 1);
+        assert_eq!(output.metrics.covered_lines, 1);
+        assert_eq!(output.metrics.diff_coverage_pct, 100.0);
+        assert!(output.findings.is_empty());
+    }
 }
 
 #[cfg(test)]

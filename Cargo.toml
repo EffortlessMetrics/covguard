@@ -60,3 +60,4 @@ glob = "0.3.3"
 insta = { version = "1.46.3", features = ["json"] }
 cucumber = "0.22.1"
 futures = "0.3.31"
+uselesskey = { version = "0.2.0", default-features = false, features = ["rsa"] }

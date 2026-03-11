@@ -183,6 +183,20 @@ fixtures/
     └── ...
 ```
 
+### Secrets-Shaped Fixtures
+
+This repository does not commit PEM, JWK, or certificate fixtures. If a test
+needs secret-shaped content, generate it at runtime with `uselesskey` from a
+deterministic seed instead of checking cryptographic material into git.
+
+The reference example lives in
+`crates/covguard-cli/tests/generated_crypto_fixtures.rs`. It generates a stable
+RSA private key, embeds it into a synthetic diff, and proves `covguard` can
+process PEM-like content without relying on committed key files.
+
+Use `module_path!()` or another stable test identifier as the seed input so the
+fixture remains reproducible across local runs and CI.
+
 ### BDD Tests (Cucumber)
 
 End-to-end scenarios in `bdd/features/`. Tests the full pipeline from
