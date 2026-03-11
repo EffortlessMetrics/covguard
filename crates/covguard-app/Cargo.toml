@@ -17,7 +17,7 @@ covguard-orchestrator = { path = "../covguard-orchestrator", version = "0.1.0" }
 
 [dev-dependencies]
 insta = { workspace = true }
-jsonschema = "0.41.0"
+jsonschema = "0.45.0"
 cucumber = { workspace = true }
 futures = { workspace = true }
 covguard-policy = { path = "../covguard-policy", version = "0.1.0" }
