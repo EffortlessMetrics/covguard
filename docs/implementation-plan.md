@@ -168,12 +168,14 @@ Ongoing requirements:
 - deterministic output tests remain green
 - explain registry covers codes used by fixtures
 
-Release gate (v0.1):
-- schemas shipped
-- golden fixtures stable
-- fuzz targets run timeboxed in CI
-- mutants run timeboxed in CI
-- docs complete (requirements/design/architecture/impl plan + codes)
+### Release gate (v0.1) — ✅ COMPLETE (2026-03-12)
+
+- ✅ schemas shipped
+- ✅ golden fixtures stable
+- ✅ fuzz targets run timeboxed in CI
+- ✅ mutants run timeboxed in CI
+- ✅ docs complete (requirements/design/architecture/impl plan + codes)
+- ✅ all 20 crates published to [crates.io](https://crates.io/search?q=covguard)
 
 ## Suggested CI matrix (minimal)
 - unit tests (linux)
@@ -189,3 +191,13 @@ Release gate (v0.1):
 - markdown + annotations renderers
 - path normalization story is explicit and tested
 - missing inputs produce skip/warn, not false confidence
+
+---
+
+## Post-Release: v0.1.0
+
+**Release Date:** 2026-03-12
+**Crates Published:** 20
+**crates.io:** https://crates.io/search?q=covguard
+
+All phases (0-8) have been completed and released as v0.1.0.

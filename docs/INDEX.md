@@ -1,5 +1,11 @@
 # covguard docs index
 
+[![crates.io](https://img.shields.io/crates/v/covguard-cli)](https://crates.io/crates/covguard-cli)
+
+**Install:** `cargo install covguard-cli`
+
+---
+
 covguard is a diff-scoped coverage gate that answers whether changed lines are covered by tests by consuming a diff (base<->head or patch) and LCOV coverage and emitting a canonical receipt plus optional PR outputs (markdown, annotations, SARIF).
 
 ## Core Documentation

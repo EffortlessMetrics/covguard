@@ -1,10 +1,40 @@
 # covguard
 
+[![crates.io](https://img.shields.io/crates/v/covguard-cli)](https://crates.io/crates/covguard-cli)
+[![docs.rs](https://docs.rs/covguard-cli/badge.svg)](https://docs.rs/covguard-cli)
+
 covguard is a diff-scoped coverage gate for pull requests.
 
 It answers one question:
 
 > Did this PR add or change lines that are not covered by tests?
+
+## Installation
+
+### Install from crates.io
+
+```bash
+cargo install covguard-cli
+```
+
+This installs the `covguard` binary (published as `covguard-cli` on crates.io).
+
+### Install as a library
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+covguard-app = "0.1.0"
+```
+
+Individual crates are also available:
+- `covguard-types` - Report DTOs, codes, constants
+- `covguard-domain` - Pure policy evaluation
+- `covguard-orchestrator` - Orchestration layer
+- `covguard-render` - Markdown/SARIF/annotations renderers
+
+**Browse all crates on [crates.io](https://crates.io/search?q=covguard)**
 
 ## Inputs
 

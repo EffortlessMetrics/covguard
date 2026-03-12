@@ -93,6 +93,22 @@ Missing inputs:
 - ignore directives enabled/disabled
 - fail_on: `error | warn | never` (standalone behavior; cockpit can override via composition policy)
 
+## Installation
+
+### From crates.io
+
+```bash
+cargo install covguard-cli
+```
+
+The CLI binary is published as `covguard-cli` on [crates.io](https://crates.io/crates/covguard-cli).
+
+### Library Usage
+
+Individual crates are available on [crates.io](https://crates.io/search?q=covguard) for library usage.
+
+---
+
 ## CLI (implemented)
 
 ### `covguard check` (primary command)
