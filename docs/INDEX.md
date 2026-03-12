@@ -19,6 +19,25 @@ covguard is a diff-scoped coverage gate that answers whether changed lines are c
 - [Codes](codes.md) — Error codes, meanings, and remediation
 - [Testing](testing.md) — Multi-layered testing strategy
 
+## Planning & Roadmap
+
+- [Roadmap](roadmap.md) — Vision, goals, release history, and future milestones
+- [Now/Next/Later](now-next-later.md) — Current priorities and upcoming work
+
+## Architecture Decision Records
+
+ADRs document significant architectural decisions:
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [ADR-001](adr/ADR-001.md) | Hexagonal/Clean Architecture | Accepted |
+| [ADR-002](adr/ADR-002.md) | Multi-crate Workspace Structure | Accepted |
+| [ADR-003](adr/ADR-003.md) | LCOV as Primary Coverage Format | Accepted |
+| [ADR-004](adr/ADR-004.md) | Unified Diff Format for Input | Accepted |
+| [ADR-005](adr/ADR-005.md) | Schema-compliant JSON Output | Accepted |
+
+See [adr/README.md](adr/README.md) for the full index and ADR guidelines.
+
 ## Crate Documentation
 
 Each crate has its own `CLAUDE.md` with crate-specific guidance:
