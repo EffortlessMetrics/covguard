@@ -6,8 +6,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords = ["coverage", "directives", "testing", "quality"]
+keywords = ["coverage", "diff", "directives", "comments"]
 categories = ["development-tools::testing"]
+documentation = "https://docs.rs/covguard-directives"
 readme = "README.md"
 rust-version.workspace = true
 

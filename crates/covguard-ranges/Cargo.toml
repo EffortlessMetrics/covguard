@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/covguard-ranges"
+keywords = ["coverage", "diff", "ranges"]
+categories = ["development-tools::testing"]
 readme = "README.md"
 rust-version.workspace = true
 
