@@ -49,7 +49,10 @@ fn test_version_displays_version() {
         .assert()
         .success()
         .stdout(predicate::str::contains("covguard"))
-        .stdout(predicate::str::contains("0.2.0"));
+        .stdout(predicate::str::contains(format!(
+            "covguard {}",
+            env!("CARGO_PKG_VERSION")
+        )));
 }
 
 #[test]

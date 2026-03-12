@@ -16,7 +16,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -41,7 +41,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -66,7 +66,7 @@ jobs:
     name: BDD Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -75,7 +75,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run BDD tests
-        run: cargo test --package covguard-core --test bdd
+        run: cargo test --package covguard-app --test bdd
 
   # Property tests (proptest) - run with more iterations in CI
   property-tests:
@@ -84,7 +84,7 @@ jobs:
     env:
       PROPTEST_CASES: 1000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -93,14 +93,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run property tests
-        run: cargo test --workspace proptest
+        run: cargo test --workspace --lib --bins proptests::
 
   # Fuzz testing smoke test (Linux only, requires nightly)
   fuzz-smoke:
     name: Fuzz Smoke Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
@@ -121,13 +121,16 @@ jobs:
       - name: Run fuzz_lcov_parser (smoke test)
         run: cargo +nightly fuzz run fuzz_lcov_parser --fuzz-dir fuzz -- -max_total_time=30
 
+      - name: Run fuzz_ranges_merge (smoke test)
+        run: cargo +nightly fuzz run fuzz_ranges_merge --fuzz-dir fuzz -- -max_total_time=30
+
   # Mutation testing (Linux only, timeboxed) - only on main branch
   mutants:
     name: Cargo Mutants
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -146,10 +149,10 @@ jobs:
     name: Validate Schemas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -168,10 +171,10 @@ jobs:
     name: MSRV Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust 1.85 (edition 2024 MSRV)
-        uses: dtolnay/rust-toolchain@1.85
+        uses: dtolnay/rust-toolchain@1.100
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -184,7 +187,7 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -202,7 +205,7 @@ jobs:
     name: Conformance Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -218,7 +221,7 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -228,3 +231,31 @@ jobs:
 
       - name: Run security audit
         run: cargo audit
+
+  # Test Coverage
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Run coverage
+        run: |
+          cargo +nightly llvm-cov --workspace --all-features --tests --branch \
+            --ignore-filename-regex "(tests/|bdd/|fuzz/|xtask/)" \
+            --fail-under-lines 100 \
+            --summary-only --output-path coverage.txt
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.txt

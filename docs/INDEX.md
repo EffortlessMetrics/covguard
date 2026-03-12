@@ -21,11 +21,15 @@ Each crate has its own `CLAUDE.md` with crate-specific guidance:
 |-------|---------|----------|
 | `covguard-types` | DTOs, schema definitions, error codes | `crates/covguard-types/CLAUDE.md` |
 | `covguard-domain` | Pure policy evaluation logic | `crates/covguard-domain/CLAUDE.md` |
+| `covguard-policy` | Shared policy/profile model and profile flags | `crates/covguard-policy/CLAUDE.md` |
 | `covguard-config` | Configuration parsing and profiles | `crates/covguard-config/CLAUDE.md` |
 | `covguard-adapters-diff` | Unified diff parsing | `crates/covguard-adapters-diff/CLAUDE.md` |
 | `covguard-adapters-coverage` | LCOV parsing | `crates/covguard-adapters-coverage/CLAUDE.md` |
+| `covguard-adapters-artifacts` | Artifact persistence (report + raw artifacts) | `crates/covguard-adapters-artifacts/README.md` |
+| `covguard-output` | Centralized markdown/annotation/SARIF rendering feature flags | `crates/covguard-output/README.md` |
 | `covguard-render` | Markdown, annotations, SARIF output | `crates/covguard-render/CLAUDE.md` |
-| `covguard-app` | Orchestration layer | `crates/covguard-app/CLAUDE.md` |
+| `covguard-orchestrator` | Orchestration layer | `crates/covguard-orchestrator` |
+| `covguard-app` | Compatibility facade | `crates/covguard-app/CLAUDE.md` |
 | `covguard-cli` | CLI binary | `crates/covguard-cli/CLAUDE.md` |
 
 ## Other Resources

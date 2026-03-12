@@ -1,0 +1,18 @@
+[package]
+name = "covguard-output"
+description = "Composable report rendering and output feature flags for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-output"
+keywords = ["coverage", "diff", "output"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+covguard-output-features.workspace = true
+covguard-render.workspace = true
+covguard-types.workspace = true

@@ -3,21 +3,30 @@
 //! This CLI tool checks whether changed lines in a pull request are covered by tests.
 
 use clap::{Parser, Subcommand, ValueEnum};
+#[cfg(test)]
+use covguard_adapters_artifacts::write_raw_artifacts_to as write_raw_artifacts_to_artifacts;
+use covguard_adapters_artifacts::{
+    ArtifactWriteError, ensure_parent_dir as ensure_parent_dir_artifacts,
+    write_fallback_receipt as write_fallback_receipt_artifacts,
+    write_raw_artifacts as write_raw_artifacts_from_adapter,
+    write_report as write_report_artifacts, write_text as write_text_artifacts,
+};
+use covguard_adapters_diff::{DiffError, load_diff_from_git};
+use covguard_adapters_repo::FsRepoReader;
+use covguard_app::{AppError, CheckRequest, SystemClock, check_with_clock_and_reader};
 use covguard_config::{
     CliOverrides, Profile, Scope as ConfigScope, discover_config, load_config, resolve_config,
 };
-use covguard_core::{
-    AppError, CheckRequest, FailOn, FsRepoReader, MissingBehavior, SystemClock,
-    check_with_clock_and_reader,
-};
-use covguard_types::{
-    CHECK_ID_RUNTIME, CODE_RUNTIME_ERROR, Capabilities, Finding, InputCapability, InputStatus,
-    Inputs, InputsCapability, REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Report,
-    ReportData, Run, SENSOR_SCHEMA_ID, Scope, Tool, Verdict, VerdictCounts, VerdictStatus,
-    compute_fingerprint, explain,
-};
+use covguard_output_features::OutputFeatureConfig;
+#[cfg(test)]
+use covguard_types::CODE_UNCOVERED_LINE;
+#[cfg(test)]
+use covguard_types::SENSOR_SCHEMA_ID;
+use covguard_types::{REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Scope, explain};
 use std::fs;
-use std::io::{self, IsTerminal, Read};
+#[cfg(not(test))]
+use std::io::IsTerminal;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -57,6 +66,19 @@ enum CliProfile {
     Moderate,
     Team,
     Strict,
+    Lenient,
+}
+
+impl From<CliProfile> for Profile {
+    fn from(profile: CliProfile) -> Self {
+        match profile {
+            CliProfile::Oss => Self::Oss,
+            CliProfile::Moderate => Self::Moderate,
+            CliProfile::Team => Self::Team,
+            CliProfile::Strict => Self::Strict,
+            CliProfile::Lenient => Self::Lenient,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -128,6 +150,18 @@ enum Commands {
         #[arg(long)]
         path_strip: Vec<String>,
 
+        /// Maximum markdown lines emitted in report output.
+        #[arg(long)]
+        max_markdown_lines: Option<usize>,
+
+        /// Maximum annotations emitted in report output.
+        #[arg(long)]
+        max_annotations: Option<usize>,
+
+        /// Maximum SARIF results emitted in report output.
+        #[arg(long)]
+        max_sarif_results: Option<usize>,
+
         /// Maximum number of findings to include in report (truncation)
         #[arg(long)]
         max_findings: Option<usize>,
@@ -192,10 +226,7 @@ enum CliError {
 /// - 2: Policy fail (blocking findings)
 const EXIT_CODE_ERROR: i32 = 1;
 
-/// Check raw CLI args for `--mode cockpit` (two consecutive args) or `--mode=cockpit`.
-/// This avoids false-positives from file paths or other values containing "cockpit".
-fn is_cockpit_in_raw_args() -> bool {
-    let args: Vec<String> = std::env::args().collect();
+fn is_cockpit_in_args(args: &[String]) -> bool {
     // Check for --mode=cockpit
     if args.iter().any(|a| a == "--mode=cockpit") {
         return true;
@@ -205,11 +236,9 @@ fn is_cockpit_in_raw_args() -> bool {
         .any(|pair| pair[0] == "--mode" && pair[1] == "cockpit")
 }
 
-/// Extract the `--out` path from raw CLI args, falling back to the default.
-fn extract_out_from_raw_args() -> String {
-    let args: Vec<String> = std::env::args().collect();
+fn extract_out_from_args(args: &[String]) -> String {
     // Check for --out=PATH
-    for arg in &args {
+    for arg in args {
         if let Some(value) = arg.strip_prefix("--out=") {
             return value.to_string();
         }
@@ -223,8 +252,18 @@ fn extract_out_from_raw_args() -> String {
     "artifacts/covguard/report.json".to_string()
 }
 
-fn main() {
-    let exit_code = match Cli::try_parse() {
+fn main() -> std::process::ExitCode {
+    let exit_code = run_cli_with_args(std::env::args().collect());
+    std::process::ExitCode::from(u8::try_from(exit_code).unwrap_or(1))
+}
+
+fn clap_exit(err: clap::Error) -> i32 {
+    let _ = err.print();
+    err.exit_code()
+}
+
+fn run_cli_with_args(args: Vec<String>) -> i32 {
+    match Cli::try_parse_from(&args) {
         Ok(cli) => match run(cli) {
             Ok(code) => code,
             Err(e) => {
@@ -233,9 +272,9 @@ fn main() {
             }
         },
         Err(clap_err) => {
-            // Check if cockpit mode was requested (scan raw args precisely)
-            if is_cockpit_in_raw_args() {
-                let out_path = extract_out_from_raw_args();
+            // Check if cockpit mode was requested (scan args precisely)
+            if is_cockpit_in_args(&args) {
+                let out_path = extract_out_from_args(&args);
                 let msg = format!("argument parsing failed: {}", clap_err);
                 if write_fallback_receipt(&out_path, &msg, REASON_TOOL_ERROR, REASON_TOOL_ERROR)
                     .is_ok()
@@ -244,14 +283,13 @@ fn main() {
                     eprintln!("wrote fallback receipt to {}", out_path);
                     0
                 } else {
-                    clap_err.exit()
+                    clap_exit(clap_err)
                 }
             } else {
-                clap_err.exit()
+                clap_exit(clap_err)
             }
         }
-    };
-    std::process::exit(exit_code);
+    }
 }
 
 fn run(cli: Cli) -> Result<i32, CliError> {
@@ -273,13 +311,21 @@ fn run(cli: Cli) -> Result<i32, CliError> {
             threshold,
             no_ignore,
             path_strip,
+            max_markdown_lines,
+            max_annotations,
+            max_sarif_results,
             max_findings,
             payload,
         } => {
             let is_cockpit = matches!(mode, CliMode::Cockpit);
             let out_path = out.clone();
+            let output = OutputFeatureConfig {
+                max_markdown_lines,
+                max_annotations,
+                max_sarif_results,
+            };
 
-            match run_check(
+            match run_check_with_output(
                 mode,
                 diff_file,
                 base,
@@ -296,6 +342,7 @@ fn run(cli: Cli) -> Result<i32, CliError> {
                 threshold,
                 no_ignore,
                 path_strip,
+                output,
                 max_findings,
                 payload,
             ) {
@@ -320,6 +367,7 @@ fn run(cli: Cli) -> Result<i32, CliError> {
     }
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn run_check(
     mode: CliMode,
@@ -341,6 +389,151 @@ fn run_check(
     max_findings: Option<usize>,
     payload: Option<String>,
 ) -> Result<i32, CliError> {
+    run_check_with_stdin(
+        mode,
+        diff_file,
+        base,
+        head,
+        lcov,
+        out,
+        md,
+        sarif,
+        raw,
+        root,
+        config_path,
+        profile,
+        scope,
+        threshold,
+        no_ignore,
+        path_strip,
+        max_findings,
+        payload,
+        read_stdin_diff,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_check_with_output(
+    mode: CliMode,
+    diff_file: Option<String>,
+    base: Option<String>,
+    head: Option<String>,
+    lcov: Vec<String>,
+    out: String,
+    md: Option<String>,
+    sarif: Option<String>,
+    raw: bool,
+    root: Option<String>,
+    config_path: Option<String>,
+    profile: Option<CliProfile>,
+    scope: Option<CliScope>,
+    threshold: Option<f64>,
+    no_ignore: bool,
+    path_strip: Vec<String>,
+    output: OutputFeatureConfig,
+    max_findings: Option<usize>,
+    payload: Option<String>,
+) -> Result<i32, CliError> {
+    run_check_with_stdin_with_output(
+        mode,
+        diff_file,
+        base,
+        head,
+        lcov,
+        out,
+        md,
+        sarif,
+        raw,
+        root,
+        config_path,
+        profile,
+        scope,
+        threshold,
+        no_ignore,
+        path_strip,
+        output,
+        max_findings,
+        payload,
+        read_stdin_diff,
+    )
+}
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+fn run_check_with_stdin<F>(
+    mode: CliMode,
+    diff_file: Option<String>,
+    base: Option<String>,
+    head: Option<String>,
+    lcov: Vec<String>,
+    out: String,
+    md: Option<String>,
+    sarif: Option<String>,
+    raw: bool,
+    root: Option<String>,
+    config_path: Option<String>,
+    profile: Option<CliProfile>,
+    scope: Option<CliScope>,
+    threshold: Option<f64>,
+    no_ignore: bool,
+    path_strip: Vec<String>,
+    max_findings: Option<usize>,
+    payload: Option<String>,
+    read_stdin: F,
+) -> Result<i32, CliError>
+where
+    F: Fn(bool) -> Result<Option<String>, CliError>,
+{
+    run_check_with_stdin_with_output(
+        mode,
+        diff_file,
+        base,
+        head,
+        lcov,
+        out,
+        md,
+        sarif,
+        raw,
+        root,
+        config_path,
+        profile,
+        scope,
+        threshold,
+        no_ignore,
+        path_strip,
+        OutputFeatureConfig::default(),
+        max_findings,
+        payload,
+        read_stdin,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_check_with_stdin_with_output<F>(
+    mode: CliMode,
+    diff_file: Option<String>,
+    base: Option<String>,
+    head: Option<String>,
+    lcov: Vec<String>,
+    out: String,
+    md: Option<String>,
+    sarif: Option<String>,
+    raw: bool,
+    root: Option<String>,
+    config_path: Option<String>,
+    profile: Option<CliProfile>,
+    scope: Option<CliScope>,
+    threshold: Option<f64>,
+    no_ignore: bool,
+    path_strip: Vec<String>,
+    output: OutputFeatureConfig,
+    max_findings: Option<usize>,
+    payload: Option<String>,
+    read_stdin: F,
+) -> Result<i32, CliError>
+where
+    F: Fn(bool) -> Result<Option<String>, CliError>,
+{
     // In standard mode, LCOV is required
     let is_cockpit_mode = matches!(mode, CliMode::Cockpit);
     if !is_cockpit_mode && lcov.is_empty() {
@@ -368,17 +561,13 @@ fn run_check(
         } else {
             Some(path_strip.clone())
         },
+        output: Some(output),
     };
 
     // Apply profile override if specified
     let config_with_profile = if let Some(cli_profile) = profile {
         let mut config = loaded_config.clone().unwrap_or_default();
-        config.profile = Some(match cli_profile {
-            CliProfile::Oss => Profile::Oss,
-            CliProfile::Moderate => Profile::Moderate,
-            CliProfile::Team => Profile::Team,
-            CliProfile::Strict => Profile::Strict,
-        });
+        config.profile = Some(cli_profile.into());
         Some(config)
     } else {
         loaded_config.clone()
@@ -397,9 +586,9 @@ fn run_check(
 
     // Determine diff source and read content
     let stdin_diff = if diff_file.as_deref() == Some("-") {
-        read_stdin_diff(true)?
+        read_stdin(true)?
     } else if diff_file.is_none() && base.is_none() && head.is_none() {
-        read_stdin_diff(false)?
+        read_stdin(false)?
     } else {
         None
     };
@@ -424,16 +613,14 @@ fn run_check(
                 (content, Some(path.clone()), None, None)
             }
             (None, Some(base_ref), Some(head_ref)) => {
-                // Execute git diff to get the diff content
-                let output = std::process::Command::new("git")
-                    .current_dir(&repo_root)
-                    .args(["diff", base_ref, head_ref])
-                    .output()
-                    .map_err(|e| CliError::FileRead {
-                        path: format!("git diff {}..{}", base_ref, head_ref),
-                        source: e,
+                let content =
+                    load_diff_from_git(base_ref, head_ref, &repo_root).map_err(|e| match e {
+                        DiffError::IoError(msg) => CliError::FileRead {
+                            path: format!("git diff {}..{}", base_ref, head_ref),
+                            source: std::io::Error::other(msg),
+                        },
+                        DiffError::InvalidFormat(msg) => CliError::ConfigLoad(msg),
                     })?;
-                let content = String::from_utf8_lossy(&output.stdout).to_string();
                 (
                     content,
                     None,
@@ -468,17 +655,6 @@ fn run_check(
         write_raw_artifacts(&diff_content, &lcov_texts)?;
     }
 
-    // Convert fail_on from config to app type
-    let fail_on = match effective.fail_on {
-        covguard_config::FailOn::Error => FailOn::Error,
-        covguard_config::FailOn::Warn => FailOn::Warn,
-        covguard_config::FailOn::Never => FailOn::Never,
-    };
-
-    // Map missing behaviors from config to app types
-    let missing_coverage = map_missing_behavior(effective.missing_coverage);
-    let missing_file = map_missing_behavior(effective.missing_file);
-
     // In cockpit mode, enable sensor schema for proper capabilities block
     let sensor_schema = is_cockpit_mode;
 
@@ -491,16 +667,17 @@ fn run_check(
         lcov_texts,
         lcov_paths: lcov.clone(),
         max_uncovered_lines: effective.max_uncovered_lines,
-        missing_coverage,
-        missing_file,
+        missing_coverage: effective.missing_coverage,
+        missing_file: effective.missing_file,
         include_patterns: effective.include_patterns.clone(),
         exclude_patterns: effective.exclude_patterns.clone(),
         path_strip: effective.path_strip.clone(),
         threshold_pct: effective.threshold_pct,
         scope: domain_scope,
-        fail_on,
+        fail_on: effective.fail_on,
         ignore_directives: effective.ignore_directives,
         ignored_lines: None, // Will be detected from source files
+        output: effective.output,
         sensor_schema,
         max_findings,
     };
@@ -515,22 +692,13 @@ fn run_check(
     // Write report JSON — in cockpit mode, --out gets the cockpit receipt;
     // in standard mode, --out gets the domain report.
     if is_cockpit_mode {
-        if let Some(ref receipt) = result.cockpit_receipt {
-            let receipt_json = serde_json::to_string_pretty(receipt)?;
-            fs::write(&out, &receipt_json).map_err(|e| CliError::FileWrite {
-                path: out.clone(),
-                source: e,
-            })?;
-        } else {
-            // Fallback: if cockpit_receipt is somehow None, write domain report
-            let report_json = serde_json::to_string_pretty(&result.report)?;
-            fs::write(&out, &report_json).map_err(|e| CliError::FileWrite {
-                path: out.clone(),
-                source: e,
-            })?;
-        }
+        let receipt = result
+            .cockpit_receipt
+            .as_ref()
+            .expect("cockpit receipt missing");
+        write_report_artifacts(&out, receipt).map_err(map_artifact_error)?;
 
-        // Write domain report (full payload) to --payload or default extras path
+        // Write domain report (full payload) to --payload or default extras path.
         let payload_path = payload.unwrap_or_else(|| {
             let out_dir = Path::new(&out).parent().unwrap_or_else(|| Path::new("."));
             out_dir
@@ -539,36 +707,19 @@ fn run_check(
                 .display()
                 .to_string()
         });
-        ensure_parent_dir(&payload_path)?;
-        let domain_json = serde_json::to_string_pretty(&result.report)?;
-        fs::write(&payload_path, &domain_json).map_err(|e| CliError::FileWrite {
-            path: payload_path,
-            source: e,
-        })?;
+        write_report_artifacts(&payload_path, &result.report).map_err(map_artifact_error)?;
     } else {
-        let report_json = serde_json::to_string_pretty(&result.report)?;
-        fs::write(&out, &report_json).map_err(|e| CliError::FileWrite {
-            path: out.clone(),
-            source: e,
-        })?;
+        write_report_artifacts(&out, &result.report).map_err(map_artifact_error)?;
     }
 
-    // Write markdown if requested
+    // Write markdown if requested.
     if let Some(md_path) = md {
-        ensure_parent_dir(&md_path)?;
-        fs::write(&md_path, &result.markdown).map_err(|e| CliError::FileWrite {
-            path: md_path,
-            source: e,
-        })?;
+        write_text_artifacts(&md_path, &result.markdown).map_err(map_artifact_error)?;
     }
 
-    // Write SARIF if requested
+    // Write SARIF if requested.
     if let Some(sarif_path) = sarif {
-        ensure_parent_dir(&sarif_path)?;
-        fs::write(&sarif_path, &result.sarif).map_err(|e| CliError::FileWrite {
-            path: sarif_path,
-            source: e,
-        })?;
+        write_text_artifacts(&sarif_path, &result.sarif).map_err(map_artifact_error)?;
     }
 
     // Print annotations to stdout
@@ -597,19 +748,22 @@ fn run_explain(code: &str) -> Result<i32, CliError> {
     }
 }
 
-fn map_missing_behavior(behavior: covguard_config::MissingBehavior) -> MissingBehavior {
-    match behavior {
-        covguard_config::MissingBehavior::Skip => MissingBehavior::Skip,
-        covguard_config::MissingBehavior::Warn => MissingBehavior::Warn,
-        covguard_config::MissingBehavior::Fail => MissingBehavior::Fail,
-    }
+#[cfg(test)]
+fn get_git_command() -> String {
+    std::env::var("COVGUARD_GIT").unwrap_or_else(|_| "git".to_string())
+}
+
+#[cfg(not(test))]
+fn get_git_command() -> String {
+    "git".to_string()
 }
 
 fn resolve_repo_root(root: Option<String>) -> PathBuf {
     if let Some(path) = root {
         return PathBuf::from(path);
     }
-    if let Ok(output) = std::process::Command::new("git")
+    let git_cmd = get_git_command();
+    if let Ok(output) = std::process::Command::new(git_cmd)
         .args(["rev-parse", "--show-toplevel"])
         .output()
         && output.status.success()
@@ -624,13 +778,30 @@ fn resolve_repo_root(root: Option<String>) -> PathBuf {
 }
 
 fn read_stdin_diff(explicit: bool) -> Result<Option<String>, CliError> {
-    let mut stdin = io::stdin();
-    if stdin.is_terminal() {
+    #[cfg(test)]
+    {
+        let mut cursor = io::Cursor::new("");
+        read_diff_from_reader(&mut cursor, true, explicit)
+    }
+    #[cfg(not(test))]
+    {
+        let mut stdin = io::stdin();
+        let is_terminal = stdin.is_terminal();
+        read_diff_from_reader(&mut stdin, is_terminal, explicit)
+    }
+}
+
+fn read_diff_from_reader(
+    reader: &mut dyn Read,
+    is_terminal: bool,
+    explicit: bool,
+) -> Result<Option<String>, CliError> {
+    if is_terminal {
         return Ok(None);
     }
 
     let mut buf = String::new();
-    stdin
+    reader
         .read_to_string(&mut buf)
         .map_err(|e| CliError::FileRead {
             path: "stdin".to_string(),
@@ -645,28 +816,16 @@ fn read_stdin_diff(explicit: bool) -> Result<Option<String>, CliError> {
 }
 
 fn write_raw_artifacts(diff_content: &str, lcov_texts: &[String]) -> Result<(), CliError> {
-    let raw_dir = Path::new("artifacts/covguard/raw");
-    if !raw_dir.exists() {
-        fs::create_dir_all(raw_dir).map_err(|e| CliError::DirCreate {
-            path: raw_dir.display().to_string(),
-            source: e,
-        })?;
-    }
+    write_raw_artifacts_from_adapter(diff_content, lcov_texts).map_err(map_artifact_error)
+}
 
-    let diff_path = raw_dir.join("diff.patch");
-    fs::write(&diff_path, diff_content).map_err(|e| CliError::FileWrite {
-        path: diff_path.display().to_string(),
-        source: e,
-    })?;
-
-    let combined_lcov = lcov_texts.join("\n");
-    let lcov_path = raw_dir.join("lcov.info");
-    fs::write(&lcov_path, combined_lcov).map_err(|e| CliError::FileWrite {
-        path: lcov_path.display().to_string(),
-        source: e,
-    })?;
-
-    Ok(())
+#[cfg(test)]
+fn write_raw_artifacts_to(
+    raw_dir: &Path,
+    diff_content: &str,
+    lcov_texts: &[String],
+) -> Result<(), CliError> {
+    write_raw_artifacts_to_artifacts(raw_dir, diff_content, lcov_texts).map_err(map_artifact_error)
 }
 
 /// Derive capability reasons from a `CliError` for the fallback receipt.
@@ -691,95 +850,62 @@ fn write_fallback_receipt(
     diff_reason: &str,
     coverage_reason: &str,
 ) -> Result<(), CliError> {
-    ensure_parent_dir(out_path)?;
-
-    let started_at = chrono::Utc::now();
-    let runtime_fp = compute_fingerprint(&[CODE_RUNTIME_ERROR, "covguard"]);
-
-    let report = Report {
-        schema: SENSOR_SCHEMA_ID.to_string(),
-        tool: Tool {
-            name: "covguard".to_string(),
-            version: "0.2.0".to_string(),
-            commit: None,
-        },
-        run: Run {
-            started_at: started_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            ended_at: Some(started_at.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-            duration_ms: Some(0),
-            capabilities: Some(Capabilities {
-                inputs: InputsCapability {
-                    diff: InputCapability {
-                        status: InputStatus::Unavailable,
-                        reason: Some(diff_reason.to_string()),
-                    },
-                    coverage: InputCapability {
-                        status: InputStatus::Unavailable,
-                        reason: Some(coverage_reason.to_string()),
-                    },
-                },
-            }),
-        },
-        verdict: Verdict {
-            status: VerdictStatus::Fail,
-            counts: VerdictCounts {
-                info: 0,
-                warn: 0,
-                error: 1,
-            },
-            reasons: vec![REASON_TOOL_ERROR.to_string()],
-        },
-        findings: vec![Finding {
-            severity: covguard_types::Severity::Error,
-            check_id: CHECK_ID_RUNTIME.to_string(),
-            code: CODE_RUNTIME_ERROR.to_string(),
-            message: format!("covguard failed due to a runtime error: {}", error_message),
-            location: None,
-            data: None,
-            fingerprint: Some(runtime_fp),
-        }],
-        data: ReportData {
-            scope: "added".to_string(),
-            threshold_pct: 0.0,
-            changed_lines_total: 0,
-            covered_lines: 0,
-            uncovered_lines: 0,
-            missing_lines: 0,
-            ignored_lines_count: 0,
-            excluded_files_count: 0,
-            diff_coverage_pct: 0.0,
-            inputs: Inputs::default(),
-            debug: None,
-            truncation: None,
-        },
-    };
-
-    let json = serde_json::to_string_pretty(&report)?;
-    fs::write(out_path, &json).map_err(|e| CliError::FileWrite {
-        path: out_path.to_string(),
-        source: e,
-    })?;
-
-    Ok(())
+    write_fallback_receipt_artifacts(out_path, error_message, diff_reason, coverage_reason)
+        .map_err(map_artifact_error)
 }
 
 /// Ensure the parent directory of a path exists
 fn ensure_parent_dir(path: &str) -> Result<(), CliError> {
-    if let Some(parent) = Path::new(path).parent()
-        && !parent.as_os_str().is_empty()
-        && !parent.exists()
-    {
-        fs::create_dir_all(parent).map_err(|e| CliError::DirCreate {
-            path: parent.display().to_string(),
-            source: e,
-        })?;
+    ensure_parent_dir_artifacts(path).map_err(map_artifact_error)
+}
+
+fn map_artifact_error(err: ArtifactWriteError) -> CliError {
+    match err {
+        ArtifactWriteError::DirCreate { path, source } => CliError::DirCreate { path, source },
+        ArtifactWriteError::FileWrite { path, source } => CliError::FileWrite { path, source },
+        ArtifactWriteError::Serialize(err) => CliError::Serialize(err),
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
+    use std::sync::Mutex;
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{name}-{unique}"))
+    }
+
+    fn workspace_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root")
+            .to_path_buf()
+    }
+
+    fn fixture_path(path: &str) -> PathBuf {
+        workspace_root().join(path)
+    }
+
+    fn set_env_var(name: &str, value: Option<std::ffi::OsString>) {
+        if let Some(path) = value {
+            unsafe {
+                std::env::set_var(name, path);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var(name);
+            }
+        }
+    }
 
     #[test]
     fn test_cli_parsing() {
@@ -804,14 +930,11 @@ mod tests {
             "--lcov",
             "coverage.info",
         ]);
-        match cli.command {
-            Commands::Check { out, threshold, .. } => {
-                assert_eq!(out, "artifacts/covguard/report.json");
-                // threshold is now optional, should be None
-                assert!(threshold.is_none());
-            }
-            Commands::Explain { .. } => panic!("unexpected explain command"),
-        }
+        assert!(matches!(
+            cli.command,
+            Commands::Check { out, ref threshold, .. }
+                if out == "artifacts/covguard/report.json" && threshold.is_none()
+        ));
     }
 
     #[test]
@@ -908,7 +1031,7 @@ mod tests {
 
     #[test]
     fn test_cli_accepts_all_profile_values() {
-        for profile in ["oss", "moderate", "team", "strict"] {
+        for profile in ["oss", "moderate", "team", "strict", "lenient"] {
             let cli = Cli::try_parse_from([
                 "covguard",
                 "check",
@@ -1007,9 +1130,47 @@ mod tests {
             "strict",
             "--threshold",
             "90",
+            "--max-markdown-lines",
+            "7",
+            "--max-annotations",
+            "5",
+            "--max-sarif-results",
+            "3",
             "--no-ignore",
         ]);
         assert!(cli.is_ok());
+    }
+
+    #[test]
+    fn test_cli_output_limits_parsing() {
+        let cli = Cli::try_parse_from([
+            "covguard",
+            "check",
+            "--diff-file",
+            "test.patch",
+            "--lcov",
+            "coverage.info",
+            "--max-markdown-lines",
+            "9",
+            "--max-annotations",
+            "4",
+            "--max-sarif-results",
+            "8",
+        ])
+        .expect("CLI should parse");
+        match cli.command {
+            Commands::Check {
+                max_markdown_lines,
+                max_annotations,
+                max_sarif_results,
+                ..
+            } => {
+                assert_eq!(max_markdown_lines, Some(9));
+                assert_eq!(max_annotations, Some(4));
+                assert_eq!(max_sarif_results, Some(8));
+            }
+            _ => panic!("unexpected command"),
+        }
     }
 
     #[test]
@@ -1054,12 +1215,13 @@ mod tests {
             "--lcov",
             "coverage.info",
         ]);
-        match cli.command {
-            Commands::Check { mode, .. } => {
-                assert!(matches!(mode, CliMode::Standard));
+        assert!(matches!(
+            cli.command,
+            Commands::Check {
+                mode: CliMode::Standard,
+                ..
             }
-            Commands::Explain { .. } => panic!("unexpected explain command"),
-        }
+        ));
     }
 
     #[test]
@@ -1072,14 +1234,10 @@ mod tests {
             "--diff-file",
             "test.patch",
         ]);
-        match cli.command {
-            Commands::Check { mode, lcov, .. } => {
-                assert!(matches!(mode, CliMode::Cockpit));
-                // In cockpit mode, lcov can be empty
-                assert!(lcov.is_empty());
-            }
-            Commands::Explain { .. } => panic!("unexpected explain command"),
-        }
+        assert!(matches!(
+            cli.command,
+            Commands::Check { mode: CliMode::Cockpit, ref lcov, .. } if lcov.is_empty()
+        ));
     }
 
     #[test]
@@ -1112,6 +1270,1324 @@ mod tests {
         let (diff, cov) = fallback_capability_reasons(&err);
         assert_eq!(diff, REASON_TOOL_ERROR);
         assert_eq!(cov, REASON_TOOL_ERROR);
+    }
+
+    #[test]
+    fn test_is_cockpit_in_args_detects_flag() {
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--mode".to_string(),
+            "cockpit".to_string(),
+        ];
+        assert!(is_cockpit_in_args(&args));
+
+        let args = vec!["covguard".to_string(), "--mode=cockpit".to_string()];
+        assert!(is_cockpit_in_args(&args));
+
+        let args = vec![
+            "covguard".to_string(),
+            "--mode".to_string(),
+            "standard".to_string(),
+            "--diff-file".to_string(),
+            "cockpit.patch".to_string(),
+        ];
+        assert!(!is_cockpit_in_args(&args));
+    }
+
+    #[test]
+    fn test_extract_out_from_args_variants() {
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--out".to_string(),
+            "custom.json".to_string(),
+        ];
+        assert_eq!(extract_out_from_args(&args), "custom.json");
+
+        let args = vec!["covguard".to_string(), "--out=inline.json".to_string()];
+        assert_eq!(extract_out_from_args(&args), "inline.json");
+
+        let args = vec!["covguard".to_string(), "check".to_string()];
+        assert_eq!(
+            extract_out_from_args(&args),
+            "artifacts/covguard/report.json"
+        );
+    }
+
+    #[test]
+    fn test_read_diff_from_reader_terminal_returns_none() {
+        let mut reader = Cursor::new("diff --git a/a.rs b/a.rs");
+        let result = read_diff_from_reader(&mut reader, true, true).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_read_diff_from_reader_empty_non_explicit_none() {
+        let mut reader = Cursor::new("   \n");
+        let result = read_diff_from_reader(&mut reader, false, false).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_read_diff_from_reader_empty_explicit_some() {
+        let mut reader = Cursor::new("");
+        let result = read_diff_from_reader(&mut reader, false, true).unwrap();
+        assert_eq!(result, Some(String::new()));
+    }
+
+    #[test]
+    fn test_read_diff_from_reader_returns_content() {
+        let mut reader = Cursor::new("diff --git a/a.rs b/a.rs");
+        let result = read_diff_from_reader(&mut reader, false, false).unwrap();
+        assert_eq!(result, Some("diff --git a/a.rs b/a.rs".to_string()));
+    }
+
+    #[test]
+    fn test_read_diff_from_reader_error() {
+        struct FailingReader;
+        impl Read for FailingReader {
+            fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+                Err(std::io::Error::other("boom"))
+            }
+        }
+
+        let mut reader = FailingReader;
+        let result = read_diff_from_reader(&mut reader, false, true);
+        assert!(matches!(result, Err(CliError::FileRead { path, .. }) if path == "stdin"));
+    }
+
+    #[test]
+    fn test_write_raw_artifacts_to_writes_files() {
+        let dir = temp_dir("covguard-cli-raw");
+        let diff = "diff --git a/a.rs b/a.rs";
+        let lcov_texts = vec!["SF:src/lib.rs\nDA:1,1\nend_of_record".to_string()];
+
+        write_raw_artifacts_to(&dir, diff, &lcov_texts).expect("write raw artifacts");
+
+        let diff_path = dir.join("diff.patch");
+        let lcov_path = dir.join("lcov.info");
+        assert!(diff_path.exists());
+        assert!(lcov_path.exists());
+
+        let diff_content = fs::read_to_string(&diff_path).expect("read diff");
+        let lcov_content = fs::read_to_string(&lcov_path).expect("read lcov");
+        assert_eq!(diff_content, diff);
+        assert_eq!(lcov_content, lcov_texts.join("\n"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_write_fallback_receipt_writes_valid_json() {
+        let dir = temp_dir("covguard-cli-fallback");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let out_path = dir.join("receipt.json");
+
+        write_fallback_receipt(
+            out_path.to_str().unwrap(),
+            "boom",
+            REASON_MISSING_DIFF,
+            REASON_MISSING_LCOV,
+        )
+        .expect("write receipt");
+
+        let content = fs::read_to_string(&out_path).expect("read receipt");
+        let value: serde_json::Value = serde_json::from_str(&content).expect("parse json");
+        assert_eq!(value["schema"], SENSOR_SCHEMA_ID);
+        assert_eq!(value["verdict"]["status"], "fail");
+        assert!(
+            value["findings"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("boom")
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_run_cli_with_args_cockpit_parse_error_writes_fallback() {
+        let dir = temp_dir("covguard-cli-parse-error");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let out_path = dir.join("fallback.json");
+
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--mode".to_string(),
+            "cockpit".to_string(),
+            "--out".to_string(),
+            out_path.display().to_string(),
+            "--unknown".to_string(),
+        ];
+
+        let code = run_cli_with_args(args);
+        assert_eq!(code, 0);
+        assert!(out_path.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_run_cli_with_args_parse_error_non_cockpit() {
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--unknown".to_string(),
+        ];
+        let code = run_cli_with_args(args);
+        assert_ne!(code, 0);
+    }
+
+    #[test]
+    fn test_run_cli_with_args_success() {
+        let temp = temp_dir("covguard-cli-args-ok");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--diff-file".to_string(),
+            diff.display().to_string(),
+            "--lcov".to_string(),
+            lcov.display().to_string(),
+            "--out".to_string(),
+            out.display().to_string(),
+        ];
+        let code = run_cli_with_args(args);
+        assert_eq!(code, 0);
+        assert!(out.exists());
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_cli_with_args_run_error() {
+        let temp = temp_dir("covguard-cli-args-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--diff-file".to_string(),
+            diff.display().to_string(),
+            "--out".to_string(),
+            out.display().to_string(),
+        ];
+        let code = run_cli_with_args(args);
+        assert_eq!(code, EXIT_CODE_ERROR);
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_cockpit_fallback_write_failure() {
+        let temp = temp_dir("covguard-cli-cockpit-fallback-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out_dir = temp.join("out_dir");
+        fs::create_dir_all(&out_dir).expect("create out dir");
+        let diff = temp.join("missing.patch");
+
+        let cli = Cli {
+            command: Commands::Check {
+                mode: CliMode::Cockpit,
+                diff_file: Some(diff.display().to_string()),
+                base: None,
+                head: None,
+                lcov: Vec::new(),
+                out: out_dir.display().to_string(),
+                md: None,
+                sarif: None,
+                raw: false,
+                root: None,
+                config: None,
+                profile: None,
+                scope: None,
+                threshold: None,
+                no_ignore: false,
+                path_strip: Vec::new(),
+                max_markdown_lines: None,
+                max_annotations: None,
+                max_sarif_results: None,
+                max_findings: None,
+                payload: None,
+            },
+        };
+
+        let result = run(cli);
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_cockpit_fallback_write_success() {
+        let temp = temp_dir("covguard-cli-cockpit-fallback-ok");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out_file = temp.join("receipt.json");
+        let diff = temp.join("missing.patch");
+
+        let cli = Cli {
+            command: Commands::Check {
+                mode: CliMode::Cockpit,
+                diff_file: Some(diff.display().to_string()),
+                base: None,
+                head: None,
+                lcov: Vec::new(),
+                out: out_file.display().to_string(),
+                md: None,
+                sarif: None,
+                raw: false,
+                root: None,
+                config: None,
+                profile: None,
+                scope: None,
+                threshold: None,
+                no_ignore: false,
+                path_strip: Vec::new(),
+                max_markdown_lines: None,
+                max_annotations: None,
+                max_sarif_results: None,
+                max_findings: None,
+                payload: None,
+            },
+        };
+
+        let result = run(cli).expect("run");
+        assert_eq!(result, 0);
+        assert!(out_file.exists());
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_explain_command() {
+        let cli = Cli {
+            command: Commands::Explain {
+                code: CODE_UNCOVERED_LINE.to_string(),
+            },
+        };
+        let code = run(cli).expect("run explain");
+        assert_eq!(code, 0);
+    }
+
+    #[test]
+    fn test_run_cli_with_args_cockpit_parse_error_fallback_write_fails() {
+        let temp = temp_dir("covguard-cli-parse-error-fail");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out_dir = temp.join("out_dir");
+        fs::create_dir_all(&out_dir).expect("create out dir");
+
+        let args = vec![
+            "covguard".to_string(),
+            "check".to_string(),
+            "--mode".to_string(),
+            "cockpit".to_string(),
+            "--out".to_string(),
+            out_dir.display().to_string(),
+            "--unknown".to_string(),
+        ];
+        let code = run_cli_with_args(args);
+        assert_ne!(code, 0);
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_standard_writes_outputs() {
+        let _guard = TEST_LOCK.lock().expect("lock");
+        let temp = temp_dir("covguard-cli-run");
+        fs::create_dir_all(&temp).expect("create temp dir");
+
+        let out = temp.join("report.json");
+        let md = temp.join("comment.md");
+        let sarif = temp.join("results.sarif");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let original_dir = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(&temp).expect("set current dir");
+
+        let code = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            Some(md.display().to_string()),
+            Some(sarif.display().to_string()),
+            true,
+            None,
+            None,
+            Some(CliProfile::Strict),
+            Some(CliScope::Touched),
+            Some(95.0),
+            true,
+            vec!["/tmp/".to_string()],
+            None,
+            None,
+        )
+        .expect("run_check");
+
+        std::env::set_current_dir(original_dir).expect("restore current dir");
+
+        assert_eq!(code, 0);
+        assert!(out.exists());
+        assert!(md.exists());
+        assert!(sarif.exists());
+        assert!(temp.join("artifacts/covguard/raw/diff.patch").exists());
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_cockpit_default_payload_path() {
+        let temp = temp_dir("covguard-cli-cockpit");
+        fs::create_dir_all(&temp).expect("create temp dir");
+
+        let out = temp.join("receipt.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/uncovered.info");
+
+        let code = run_check(
+            CliMode::Cockpit,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            Some(1),
+            None,
+        )
+        .expect("run_check");
+
+        assert_eq!(code, 0);
+        assert!(out.exists());
+        assert!(temp.join("extras").join("payload.json").exists());
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_with_stdin_dash() {
+        let temp = temp_dir("covguard-cli-stdin");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/src/lib.rs
+@@ -0,0 +1,1 @@
++fn main() {}
+"#;
+        let lcov_path = temp.join("coverage.info");
+        fs::write(&lcov_path, "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n").expect("write lcov");
+
+        let code = run_check_with_stdin(
+            CliMode::Standard,
+            Some("-".to_string()),
+            None,
+            None,
+            vec![lcov_path.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+            |_explicit| Ok(Some(diff.to_string())),
+        )
+        .expect("run_check_with_stdin");
+
+        assert_eq!(code, 0);
+        let report: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+        assert_eq!(report["data"]["inputs"]["diff_source"], "stdin");
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_with_git_refs() {
+        use std::process::Command;
+
+        let repo = temp_dir("covguard-cli-git");
+        fs::create_dir_all(repo.join("src")).expect("create repo");
+        Command::new("git")
+            .current_dir(&repo)
+            .args(["init"])
+            .output()
+            .expect("git init");
+
+        let file_path = repo.join("src").join("lib.rs");
+        fs::write(&file_path, "fn main() {}\n").expect("write file");
+        Command::new("git")
+            .current_dir(&repo)
+            .args(["add", "."])
+            .output()
+            .expect("git add");
+        Command::new("git")
+            .current_dir(&repo)
+            .args([
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=test",
+                "commit",
+                "-m",
+                "init",
+            ])
+            .output()
+            .expect("git commit");
+
+        fs::write(&file_path, "fn main() { println!(\"hi\"); }\n").expect("write file");
+        Command::new("git")
+            .current_dir(&repo)
+            .args(["add", "."])
+            .output()
+            .expect("git add");
+        Command::new("git")
+            .current_dir(&repo)
+            .args([
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=test",
+                "commit",
+                "-m",
+                "update",
+            ])
+            .output()
+            .expect("git commit");
+
+        let base = String::from_utf8_lossy(
+            &Command::new("git")
+                .current_dir(&repo)
+                .args(["rev-parse", "HEAD~1"])
+                .output()
+                .expect("rev-parse")
+                .stdout,
+        )
+        .trim()
+        .to_string();
+        let head = String::from_utf8_lossy(
+            &Command::new("git")
+                .current_dir(&repo)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .expect("rev-parse")
+                .stdout,
+        )
+        .trim()
+        .to_string();
+
+        let lcov_path = repo.join("coverage.info");
+        fs::write(&lcov_path, "TN:\nSF:src/lib.rs\nDA:1,1\nend_of_record\n").expect("write lcov");
+
+        let out = repo.join("report.json");
+        let code = run_check(
+            CliMode::Standard,
+            None,
+            Some(base),
+            Some(head),
+            vec![lcov_path.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            Some(repo.display().to_string()),
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        )
+        .expect("run_check");
+
+        assert_eq!(code, 0);
+        let report: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+        assert_eq!(report["data"]["inputs"]["diff_source"], "git-refs");
+
+        let _ = fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn test_run_check_config_load_error() {
+        let temp = temp_dir("covguard-cli-config-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let config_path = temp.join("covguard.toml");
+        fs::write(&config_path, "min_diff_coverage_pct = 150").expect("write config");
+
+        let result = run_check(
+            CliMode::Standard,
+            Some("test.patch".to_string()),
+            None,
+            None,
+            vec!["coverage.info".to_string()],
+            "out.json".to_string(),
+            None,
+            None,
+            false,
+            None,
+            Some(config_path.display().to_string()),
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+
+        assert!(matches!(result, Err(CliError::ConfigLoad(_))));
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_config_load_success() {
+        let temp = temp_dir("covguard-cli-config");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let config_path = temp.join("covguard.toml");
+        fs::write(&config_path, "min_diff_coverage_pct = 50").expect("write config");
+
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let code = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            Some(workspace_root().display().to_string()),
+            Some(config_path.display().to_string()),
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        )
+        .expect("run_check");
+
+        assert_eq!(code, 0);
+        assert!(out.exists());
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_prints_annotations() {
+        let temp = temp_dir("covguard-cli-annotations");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/uncovered.info");
+
+        let code = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            Some(workspace_root().display().to_string()),
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        )
+        .expect("run_check");
+
+        assert_eq!(code, 2);
+        assert!(out.exists());
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_explain_known_and_unknown() {
+        assert_eq!(run_explain(CODE_UNCOVERED_LINE).unwrap(), 0);
+        assert_eq!(run_explain("covguard.unknown").unwrap(), 1);
+    }
+
+    #[test]
+    fn test_resolve_repo_root_git_and_fallback() {
+        let _guard = TEST_LOCK.lock().expect("lock");
+        let temp = temp_dir("covguard-cli-root");
+        let override_root = temp.join("override");
+        fs::create_dir_all(&override_root).expect("create override dir");
+        assert_eq!(
+            resolve_repo_root(Some(override_root.display().to_string())),
+            override_root
+        );
+
+        let fallback_dir = temp.join("no-git");
+        fs::create_dir_all(&fallback_dir).expect("create fallback dir");
+
+        let original_dir = std::env::current_dir().expect("current dir");
+        let initial_git_dir = std::env::var("GIT_DIR").ok();
+
+        for original in [Some("orig-git-dir".to_string()), None] {
+            if let Some(value) = &original {
+                unsafe {
+                    std::env::set_var("GIT_DIR", value);
+                }
+            } else {
+                unsafe {
+                    std::env::remove_var("GIT_DIR");
+                }
+            }
+
+            let original_git_dir = std::env::var("GIT_DIR").ok();
+            std::env::set_current_dir(&fallback_dir).expect("set current dir");
+            unsafe {
+                std::env::set_var(
+                    "GIT_DIR",
+                    fallback_dir.join("missing").display().to_string(),
+                );
+            }
+            let fallback = resolve_repo_root(None);
+
+            if let Some(value) = original_git_dir {
+                unsafe {
+                    std::env::set_var("GIT_DIR", value);
+                }
+            } else {
+                unsafe {
+                    std::env::remove_var("GIT_DIR");
+                }
+            }
+            std::env::set_current_dir(&original_dir).expect("restore current dir");
+
+            assert_eq!(fallback, fallback_dir);
+        }
+
+        let restore_git_dir = |value: Option<String>| {
+            if let Some(value) = value {
+                unsafe {
+                    std::env::set_var("GIT_DIR", value);
+                }
+            } else {
+                unsafe {
+                    std::env::remove_var("GIT_DIR");
+                }
+            }
+        };
+        restore_git_dir(Some("dummy".to_string()));
+        restore_git_dir(None);
+        restore_git_dir(initial_git_dir);
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_resolve_repo_root_git_success() {
+        let _guard = TEST_LOCK.lock().expect("lock");
+        let temp = temp_dir("covguard-cli-root-git");
+        let repo = temp.join("repo");
+        let nested = repo.join("a").join("b");
+        fs::create_dir_all(&nested).expect("create nested");
+
+        let init = std::process::Command::new("git")
+            .current_dir(&repo)
+            .args(["init", "-q"])
+            .status()
+            .expect("git init");
+        assert!(init.success());
+
+        let original = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(&nested).expect("set current dir");
+        let root = resolve_repo_root(None);
+        std::env::set_current_dir(original).expect("restore current dir");
+
+        assert_eq!(root, repo);
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_resolve_repo_root_git_empty_output() {
+        let _guard = TEST_LOCK.lock().expect("lock");
+        let temp = temp_dir("covguard-cli-git-empty");
+        fs::create_dir_all(&temp).expect("create temp dir");
+
+        #[cfg(windows)]
+        let fake_git = temp.join("git.cmd");
+        #[cfg(not(windows))]
+        let fake_git = temp.join("git");
+
+        #[cfg(windows)]
+        {
+            fs::write(&fake_git, "@echo off\r\nexit /b 0\r\n").expect("write fake git");
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::write(&fake_git, "#!/bin/sh\nexit 0\n").expect("write fake git");
+            let mut perms = fs::metadata(&fake_git).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&fake_git, perms).expect("chmod");
+        }
+
+        let original_git = std::env::var_os("COVGUARD_GIT");
+        set_env_var("COVGUARD_GIT", Some(fake_git.clone().into_os_string()));
+
+        let original_dir = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(&temp).expect("set current dir");
+        let root = resolve_repo_root(None);
+        std::env::set_current_dir(original_dir).expect("restore current dir");
+
+        set_env_var("COVGUARD_GIT", None);
+        set_env_var("COVGUARD_GIT", original_git);
+
+        assert_eq!(root, temp);
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_creates_nested() {
+        let temp = temp_dir("covguard-cli-parent");
+        let nested = temp.join("deep").join("nested").join("report.json");
+        ensure_parent_dir(nested.to_str().unwrap()).expect("ensure parent");
+        assert!(nested.parent().unwrap().exists());
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_blocked_parent_errors() {
+        let temp = temp_dir("covguard-cli-parent-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let blocker = temp.join("blocker");
+        fs::write(&blocker, "x").expect("write blocker");
+        let nested = blocker.join("child").join("report.json");
+
+        let result = ensure_parent_dir(nested.to_str().unwrap());
+        assert!(matches!(result, Err(CliError::DirCreate { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_write_fallback_receipt_file_write_error() {
+        let temp = temp_dir("covguard-cli-fallback-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out_path = temp.join("dir_as_file");
+        fs::create_dir_all(&out_path).expect("create dir");
+
+        let result = write_fallback_receipt(
+            out_path.to_str().unwrap(),
+            "boom",
+            REASON_MISSING_DIFF,
+            REASON_MISSING_LCOV,
+        );
+        assert!(matches!(result, Err(CliError::FileWrite { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_diff_file_dash_without_stdin_errors() {
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+        let temp = temp_dir("covguard-cli-stdin-empty");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+
+        let result = run_check_with_stdin(
+            CliMode::Standard,
+            Some("-".to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+            |_explicit| Ok(None),
+        );
+        assert!(matches!(result, Err(CliError::MissingDiffSource)));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_diff_file_missing_errors() {
+        let temp = temp_dir("covguard-cli-missing-diff");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let diff = temp.join("missing.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+        let out = temp.join("report.json");
+
+        let result = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileRead { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_git_diff_root_missing_errors() {
+        let temp = temp_dir("covguard-cli-missing-root");
+        let missing_root = temp.join("nope");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+        let out = temp.join("report.json");
+
+        let result = run_check(
+            CliMode::Standard,
+            None,
+            Some("base".to_string()),
+            Some("head".to_string()),
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            Some(missing_root.display().to_string()),
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileRead { .. })));
+    }
+
+    #[test]
+    fn test_run_check_reads_diff_from_stdin_without_diff_file() {
+        let temp = temp_dir("covguard-cli-stdin-diff");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let diff_content = fs::read_to_string(&diff).expect("read diff");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let result = run_check_with_stdin(
+            CliMode::Standard,
+            None,
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+            move |_explicit| Ok(Some(diff_content.clone())),
+        )
+        .expect("run_check");
+
+        assert_eq!(result, 0);
+        assert!(out.exists());
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_lcov_file_missing_errors() {
+        let temp = temp_dir("covguard-cli-missing-lcov");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = temp.join("missing.info");
+        let out = temp.join("report.json");
+
+        let result = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileRead { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_profile_mapping_variants() {
+        let temp = temp_dir("covguard-cli-profiles");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let profiles = [
+            (CliProfile::Oss, "oss"),
+            (CliProfile::Moderate, "moderate"),
+            (CliProfile::Team, "team"),
+            (CliProfile::Lenient, "lenient"),
+        ];
+
+        for (profile, name) in profiles {
+            let out = temp.join(format!("report-{name}.json"));
+            let code = run_check(
+                CliMode::Standard,
+                Some(diff.display().to_string()),
+                None,
+                None,
+                vec![lcov.display().to_string()],
+                out.display().to_string(),
+                None,
+                None,
+                false,
+                None,
+                None,
+                Some(profile),
+                Some(CliScope::Added),
+                None,
+                false,
+                Vec::new(),
+                None,
+                None,
+            )
+            .expect("run_check");
+            assert_eq!(code, 0);
+            assert!(out.exists());
+        }
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_fail_on_mapping_warn_never() {
+        let temp = temp_dir("covguard-cli-failon");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        for (value, name) in [("warn", "warn"), ("never", "never")] {
+            let config_path = temp.join(format!("config-{name}.toml"));
+            fs::write(&config_path, format!("fail_on = \"{value}\"")).expect("write config");
+            let out = temp.join(format!("report-{name}.json"));
+
+            let code = run_check(
+                CliMode::Standard,
+                Some(diff.display().to_string()),
+                None,
+                None,
+                vec![lcov.display().to_string()],
+                out.display().to_string(),
+                None,
+                None,
+                false,
+                None,
+                Some(config_path.display().to_string()),
+                None,
+                None,
+                None,
+                false,
+                Vec::new(),
+                None,
+                None,
+            )
+            .expect("run_check");
+            assert_eq!(code, 0);
+        }
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_cockpit_out_write_error() {
+        let temp = temp_dir("covguard-cli-cockpit-out-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out_dir = temp.join("out_dir");
+        fs::create_dir_all(&out_dir).expect("create out dir");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let result = run_check(
+            CliMode::Cockpit,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out_dir.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileWrite { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_cockpit_payload_write_error() {
+        let temp = temp_dir("covguard-cli-cockpit-payload-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out = temp.join("report.json");
+        let payload_dir = temp.join("payload");
+        fs::create_dir_all(&payload_dir).expect("create payload dir");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let result = run_check(
+            CliMode::Cockpit,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            Some(payload_dir.display().to_string()),
+        );
+        assert!(matches!(result, Err(CliError::FileWrite { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_standard_out_write_error() {
+        let temp = temp_dir("covguard-cli-out-write-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let out_dir = temp.join("out_dir");
+        fs::create_dir_all(&out_dir).expect("create out dir");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let result = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out_dir.display().to_string(),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileWrite { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_standard_md_write_error() {
+        let temp = temp_dir("covguard-cli-md-write-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let md_dir = temp.join("md_dir");
+        fs::create_dir_all(&md_dir).expect("create md dir");
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let result = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            Some(md_dir.display().to_string()),
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileWrite { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_run_check_standard_sarif_write_error() {
+        let temp = temp_dir("covguard-cli-sarif-write-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let sarif_dir = temp.join("sarif_dir");
+        fs::create_dir_all(&sarif_dir).expect("create sarif dir");
+        let out = temp.join("report.json");
+        let diff = fixture_path("fixtures/diff/simple_added.patch");
+        let lcov = fixture_path("fixtures/lcov/covered.info");
+
+        let result = run_check(
+            CliMode::Standard,
+            Some(diff.display().to_string()),
+            None,
+            None,
+            vec![lcov.display().to_string()],
+            out.display().to_string(),
+            None,
+            Some(sarif_dir.display().to_string()),
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(CliError::FileWrite { .. })));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_write_raw_artifacts_dir_create_error() {
+        let temp = temp_dir("covguard-cli-raw-dir-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let blocking_file = temp.join("blocker");
+        fs::write(&blocking_file, "x").expect("write blocker");
+        let raw_dir = blocking_file.join("child");
+
+        let err = write_raw_artifacts_to(&raw_dir, "diff", &["lcov".to_string()])
+            .expect_err("expected dir create error");
+        assert!(matches!(err, CliError::DirCreate { .. }));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_write_raw_artifacts_diff_write_error() {
+        let temp = temp_dir("covguard-cli-raw-write-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let raw_dir_file = temp.join("raw");
+        fs::write(&raw_dir_file, "not a dir").expect("write file");
+
+        let err = write_raw_artifacts_to(&raw_dir_file, "diff", &["lcov".to_string()])
+            .expect_err("expected file write error");
+        assert!(matches!(err, CliError::FileWrite { .. }));
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn test_write_raw_artifacts_lcov_write_error() {
+        let temp = temp_dir("covguard-cli-raw-lcov-error");
+        fs::create_dir_all(&temp).expect("create temp dir");
+        let raw_dir = temp.join("raw");
+        fs::create_dir_all(&raw_dir).expect("create raw dir");
+        fs::create_dir_all(raw_dir.join("lcov.info")).expect("create lcov dir");
+
+        let err = write_raw_artifacts_to(&raw_dir, "diff", &["lcov".to_string()])
+            .expect_err("expected file write error");
+        assert!(matches!(err, CliError::FileWrite { .. }));
+
+        let _ = fs::remove_dir_all(&temp);
     }
 }
 

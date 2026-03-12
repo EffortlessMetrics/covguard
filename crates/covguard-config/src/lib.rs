@@ -6,6 +6,9 @@
 //! - Profile system (oss, team, strict)
 //! - Precedence handling (CLI > config file > defaults)
 
+use covguard_output_features::{OutputFeatureConfig, OutputFeatureFlags};
+use covguard_policy::profile_defaults as policy_profile_defaults;
+pub use covguard_policy::{FailOn, MissingBehavior, Profile, Scope};
 use serde::Deserialize;
 use std::path::Path;
 use thiserror::Error;
@@ -33,61 +36,6 @@ pub enum ConfigError {
 // ============================================================================
 // Configuration Types
 // ============================================================================
-
-/// Built-in configuration profiles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Profile {
-    /// Open-source friendly: warn on uncovered + missing coverage.
-    /// Good for adoption without blocking PRs.
-    Oss,
-    /// Moderate: transitional profile between oss and team.
-    /// 75% threshold, fail on error, warn on missing.
-    Moderate,
-    /// Team standard: error on uncovered, warn on missing.
-    #[default]
-    Team,
-    /// Strict: error on both uncovered and missing, higher threshold.
-    /// Allows a small buffer of uncovered lines (5).
-    Strict,
-}
-
-/// Scope of lines to evaluate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Scope {
-    /// Only evaluate added lines.
-    #[default]
-    Added,
-    /// Evaluate all touched (added + modified) lines.
-    Touched,
-}
-
-/// Determines when the evaluation should fail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum FailOn {
-    /// Fail if there are any error-level findings.
-    #[default]
-    Error,
-    /// Fail if there are any warn-level or error-level findings.
-    Warn,
-    /// Never fail (always pass unless there's a runtime error).
-    Never,
-}
-
-/// How to handle missing coverage data.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MissingBehavior {
-    /// Skip lines/files with missing coverage (don't count them).
-    Skip,
-    /// Warn about missing coverage but don't fail.
-    #[default]
-    Warn,
-    /// Fail if there's any missing coverage.
-    Fail,
-}
 
 /// Path filtering configuration.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -163,6 +111,10 @@ pub struct Config {
     /// Path normalization configuration.
     #[serde(default)]
     pub normalize: NormalizeConfig,
+
+    /// Rendering budgets for markdown, annotations, and SARIF output.
+    #[serde(default)]
+    pub output: OutputFeatureConfig,
 }
 
 // ============================================================================
@@ -187,6 +139,7 @@ pub struct EffectiveConfig {
     pub include_patterns: Vec<String>,
     pub ignore_directives: bool,
     pub path_strip: Vec<String>,
+    pub output: OutputFeatureFlags,
 }
 
 impl Default for EffectiveConfig {
@@ -202,6 +155,7 @@ impl Default for EffectiveConfig {
             include_patterns: vec![],
             ignore_directives: true,
             path_strip: vec![],
+            output: OutputFeatureFlags::default(),
         }
     }
 }
@@ -212,55 +166,20 @@ impl Default for EffectiveConfig {
 
 /// Get default configuration for a profile.
 pub fn profile_defaults(profile: Profile) -> EffectiveConfig {
-    match profile {
-        Profile::Oss => EffectiveConfig {
-            scope: Scope::Added,
-            fail_on: FailOn::Never, // Don't fail, just warn
-            threshold_pct: 70.0,    // Lower threshold
-            max_uncovered_lines: None,
-            missing_coverage: MissingBehavior::Skip,
-            missing_file: MissingBehavior::Skip,
-            exclude_patterns: vec![],
-            include_patterns: vec![],
-            ignore_directives: true,
-            path_strip: vec![],
-        },
-        Profile::Moderate => EffectiveConfig {
-            scope: Scope::Added,
-            fail_on: FailOn::Error,
-            threshold_pct: 75.0, // Transitional threshold
-            max_uncovered_lines: None,
-            missing_coverage: MissingBehavior::Warn,
-            missing_file: MissingBehavior::Skip, // More lenient on missing files
-            exclude_patterns: vec![],
-            include_patterns: vec![],
-            ignore_directives: true,
-            path_strip: vec![],
-        },
-        Profile::Team => EffectiveConfig {
-            scope: Scope::Added,
-            fail_on: FailOn::Error,
-            threshold_pct: 80.0,
-            max_uncovered_lines: None,
-            missing_coverage: MissingBehavior::Warn,
-            missing_file: MissingBehavior::Warn,
-            exclude_patterns: vec![],
-            include_patterns: vec![],
-            ignore_directives: true,
-            path_strip: vec![],
-        },
-        Profile::Strict => EffectiveConfig {
-            scope: Scope::Touched, // Check all touched lines
-            fail_on: FailOn::Error,
-            threshold_pct: 90.0,          // Higher threshold
-            max_uncovered_lines: Some(5), // Small buffer for edge cases
-            missing_coverage: MissingBehavior::Fail,
-            missing_file: MissingBehavior::Fail,
-            exclude_patterns: vec![],
-            include_patterns: vec![],
-            ignore_directives: true,
-            path_strip: vec![],
-        },
+    let defaults = policy_profile_defaults(profile);
+
+    EffectiveConfig {
+        scope: defaults.scope,
+        fail_on: defaults.fail_on,
+        threshold_pct: defaults.threshold_pct,
+        max_uncovered_lines: defaults.max_uncovered_lines,
+        missing_coverage: defaults.missing_coverage,
+        missing_file: defaults.missing_file,
+        exclude_patterns: vec![],
+        include_patterns: vec![],
+        ignore_directives: defaults.ignore_directives,
+        path_strip: vec![],
+        output: OutputFeatureFlags::default(),
     }
 }
 
@@ -331,6 +250,7 @@ pub struct CliOverrides {
     pub max_uncovered_lines: Option<u32>,
     pub ignore_directives: Option<bool>,
     pub path_strip: Option<Vec<String>>,
+    pub output: Option<OutputFeatureConfig>,
 }
 
 /// Resolve effective configuration from profile, config file, and CLI overrides.
@@ -365,6 +285,7 @@ pub fn resolve_config(config: Option<&Config>, cli: &CliOverrides) -> EffectiveC
         effective.include_patterns = config.paths.include.clone();
         effective.ignore_directives = config.ignore_config.directives;
         effective.path_strip = config.normalize.path_strip.clone();
+        effective.output = config.output.materialize(effective.output);
     }
 
     // Apply CLI overrides
@@ -385,6 +306,9 @@ pub fn resolve_config(config: Option<&Config>, cli: &CliOverrides) -> EffectiveC
     }
     if let Some(path_strip) = &cli.path_strip {
         effective.path_strip = path_strip.clone();
+    }
+    if let Some(output) = cli.output {
+        effective.output = output.materialize(effective.output);
     }
 
     effective
@@ -436,12 +360,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_default_true_returns_true() {
+        assert!(default_true());
+    }
+    #[test]
+    fn test_effective_config_default_values() {
+        let defaults = EffectiveConfig::default();
+        let output = OutputFeatureFlags::default();
+        assert_eq!(defaults.scope, Scope::Added);
+        assert_eq!(defaults.fail_on, FailOn::Error);
+        assert_eq!(defaults.threshold_pct, 80.0);
+        assert_eq!(defaults.max_uncovered_lines, None);
+        assert_eq!(defaults.missing_coverage, MissingBehavior::Warn);
+        assert_eq!(defaults.missing_file, MissingBehavior::Warn);
+        assert!(defaults.exclude_patterns.is_empty());
+        assert!(defaults.include_patterns.is_empty());
+        assert!(defaults.ignore_directives);
+        assert!(defaults.path_strip.is_empty());
+        assert_eq!(
+            defaults.output.max_markdown_lines,
+            output.max_markdown_lines
+        );
+        assert_eq!(defaults.output.max_annotations, output.max_annotations);
+        assert_eq!(defaults.output.max_sarif_results, output.max_sarif_results);
+    }
+    #[test]
     fn test_parse_minimal_config() {
         let config = parse_config("").unwrap();
         assert!(config.profile.is_none());
         assert!(config.scope.is_none());
     }
-
     #[test]
     fn test_parse_full_config() {
         let toml = r#"
@@ -462,6 +410,11 @@ directives = false
 
 [normalize]
 path_strip = ["/home/runner/"]
+
+[output]
+max_markdown_lines = 12
+max_annotations = 21
+max_sarif_results = 7
 "#;
         let config = parse_config(toml).unwrap();
 
@@ -476,15 +429,16 @@ path_strip = ["/home/runner/"]
         assert_eq!(config.paths.include, vec!["src/**"]);
         assert!(!config.ignore_config.directives);
         assert_eq!(config.normalize.path_strip, vec!["/home/runner/"]);
+        assert_eq!(config.output.max_markdown_lines, Some(12));
+        assert_eq!(config.output.max_annotations, Some(21));
+        assert_eq!(config.output.max_sarif_results, Some(7));
     }
-
     #[test]
     fn test_invalid_threshold() {
         let toml = "min_diff_coverage_pct = 150";
         let result = parse_config(toml);
         assert!(result.is_err());
     }
-
     #[test]
     fn test_profile_defaults_oss() {
         let defaults = profile_defaults(Profile::Oss);
@@ -494,7 +448,6 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Skip);
         assert_eq!(defaults.scope, Scope::Added);
     }
-
     #[test]
     fn test_profile_defaults_moderate() {
         let defaults = profile_defaults(Profile::Moderate);
@@ -504,7 +457,6 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Skip);
         assert_eq!(defaults.scope, Scope::Added);
     }
-
     #[test]
     fn test_profile_defaults_team() {
         let defaults = profile_defaults(Profile::Team);
@@ -514,7 +466,6 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Warn);
         assert_eq!(defaults.scope, Scope::Added);
     }
-
     #[test]
     fn test_profile_defaults_strict() {
         let defaults = profile_defaults(Profile::Strict);
@@ -525,7 +476,16 @@ path_strip = ["/home/runner/"]
         assert_eq!(defaults.missing_file, MissingBehavior::Fail);
         assert_eq!(defaults.scope, Scope::Touched);
     }
-
+    #[test]
+    fn test_profile_defaults_lenient() {
+        let defaults = profile_defaults(Profile::Lenient);
+        assert_eq!(defaults.fail_on, FailOn::Never);
+        assert_eq!(defaults.threshold_pct, 0.0);
+        assert_eq!(defaults.max_uncovered_lines, None);
+        assert_eq!(defaults.missing_coverage, MissingBehavior::Warn);
+        assert_eq!(defaults.missing_file, MissingBehavior::Warn);
+        assert_eq!(defaults.scope, Scope::Added);
+    }
     #[test]
     fn test_resolve_config_cli_overrides() {
         let config = parse_config("min_diff_coverage_pct = 70").unwrap();
@@ -533,13 +493,112 @@ path_strip = ["/home/runner/"]
             threshold_pct: Some(85.0),
             ..Default::default()
         };
-
         let effective = resolve_config(Some(&config), &cli);
 
-        // CLI should override config
         assert_eq!(effective.threshold_pct, 85.0);
     }
 
+    #[test]
+    fn test_resolve_config_output_materializes_defaults() {
+        let config = parse_config(
+            r#"
+[output]
+max_markdown_lines = 12
+max_annotations = 34
+"#,
+        )
+        .unwrap();
+        let cli = CliOverrides::default();
+        let effective = resolve_config(Some(&config), &cli);
+
+        assert_eq!(effective.output.max_markdown_lines, 12);
+        assert_eq!(effective.output.max_annotations, 34);
+        assert_eq!(
+            effective.output.max_sarif_results,
+            OutputFeatureFlags::default().max_sarif_results
+        );
+    }
+
+    #[test]
+    fn test_resolve_config_output_cli_precedence() {
+        let config = parse_config(
+            r#"
+[output]
+max_markdown_lines = 12
+max_annotations = 34
+max_sarif_results = 56
+"#,
+        )
+        .unwrap();
+        let cli = CliOverrides {
+            output: Some(OutputFeatureConfig {
+                max_markdown_lines: Some(5),
+                max_annotations: None,
+                max_sarif_results: None,
+            }),
+            ..Default::default()
+        };
+        let effective = resolve_config(Some(&config), &cli);
+
+        assert_eq!(effective.output.max_markdown_lines, 5);
+        assert_eq!(effective.output.max_annotations, 34);
+        assert_eq!(effective.output.max_sarif_results, 56);
+    }
+    #[test]
+    fn test_resolve_config_applies_config_fields() {
+        let toml = r#"
+profile = "moderate"
+scope = "touched"
+fail_on = "warn"
+min_diff_coverage_pct = 66
+max_uncovered_lines = 12
+missing_coverage = "skip"
+missing_file = "fail"
+
+[paths]
+exclude = ["target/**"]
+include = ["src/**"]
+
+[ignore]
+directives = false
+
+[normalize]
+path_strip = ["/workspace/"]
+"#;
+        let config = parse_config(toml).unwrap();
+        let cli = CliOverrides::default();
+        let effective = resolve_config(Some(&config), &cli);
+        assert_eq!(effective.scope, Scope::Touched);
+        assert_eq!(effective.fail_on, FailOn::Warn);
+        assert_eq!(effective.threshold_pct, 66.0);
+        assert_eq!(effective.max_uncovered_lines, Some(12));
+        assert_eq!(effective.missing_coverage, MissingBehavior::Skip);
+        assert_eq!(effective.missing_file, MissingBehavior::Fail);
+        assert_eq!(effective.exclude_patterns, vec!["target/**"]);
+        assert_eq!(effective.include_patterns, vec!["src/**"]);
+        assert!(!effective.ignore_directives);
+        assert_eq!(effective.path_strip, vec!["/workspace/"]);
+    }
+    #[test]
+    fn test_resolve_config_cli_overrides_all_fields() {
+        let config = parse_config("min_diff_coverage_pct = 70").unwrap();
+        let cli = CliOverrides {
+            scope: Some(Scope::Touched),
+            fail_on: Some(FailOn::Warn),
+            threshold_pct: Some(85.0),
+            max_uncovered_lines: Some(9),
+            ignore_directives: Some(false),
+            path_strip: Some(vec!["/tmp/".to_string()]),
+            output: None,
+        };
+        let effective = resolve_config(Some(&config), &cli);
+        assert_eq!(effective.scope, Scope::Touched);
+        assert_eq!(effective.fail_on, FailOn::Warn);
+        assert_eq!(effective.threshold_pct, 85.0);
+        assert_eq!(effective.max_uncovered_lines, Some(9));
+        assert!(!effective.ignore_directives);
+        assert_eq!(effective.path_strip, vec!["/tmp/"]);
+    }
     #[test]
     fn test_resolve_config_no_config() {
         let cli = CliOverrides::default();
@@ -549,7 +608,6 @@ path_strip = ["/home/runner/"]
         assert_eq!(effective.threshold_pct, 80.0);
         assert_eq!(effective.fail_on, FailOn::Error);
     }
-
     #[test]
     fn test_matches_any_pattern() {
         assert!(matches_any_pattern(
@@ -565,7 +623,13 @@ path_strip = ["/home/runner/"]
             &["target/**".to_string()]
         ));
     }
-
+    #[test]
+    fn test_matches_any_pattern_invalid_glob_returns_false() {
+        assert!(!matches_any_pattern(
+            "src/lib.rs",
+            &["[invalid".to_string()]
+        ));
+    }
     #[test]
     fn test_should_include_path() {
         let exclude = vec!["target/**".to_string(), "vendor/**".to_string()];
@@ -575,7 +639,6 @@ path_strip = ["/home/runner/"]
         assert!(!should_include_path("target/debug/foo", &include, &exclude));
         assert!(!should_include_path("vendor/lib.rs", &include, &exclude));
     }
-
     #[test]
     fn test_should_include_path_with_allowlist() {
         let exclude = vec![];
@@ -583,5 +646,36 @@ path_strip = ["/home/runner/"]
 
         assert!(should_include_path("src/lib.rs", &include, &exclude));
         assert!(!should_include_path("tests/test.rs", &include, &exclude));
+    }
+    #[test]
+    fn test_load_and_discover_config() {
+        use std::fs;
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("covguard-config-{unique}"));
+        let nested = root.join("child");
+        fs::create_dir_all(&nested).expect("create temp dirs");
+
+        let config_path = root.join("covguard.toml");
+        fs::write(&config_path, "min_diff_coverage_pct = 72").expect("write config");
+
+        let loaded = load_config(&config_path).expect("load config");
+        assert_eq!(loaded.min_diff_coverage_pct, Some(72.0));
+
+        let original_dir = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(&nested).expect("set current dir");
+        let discovered = discover_config().expect("discover config");
+        std::env::set_current_dir(original_dir).expect("restore current dir");
+
+        let expected_path = std::fs::canonicalize(&config_path).expect("canonicalize expected");
+        let actual_path = std::fs::canonicalize(&discovered.0).expect("canonicalize discovered");
+
+        assert_eq!(actual_path, expected_path);
+        assert_eq!(discovered.1.min_diff_coverage_pct, Some(72.0));
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

@@ -60,7 +60,8 @@ Hexagonal/clean architecture with pure domain core:
 - `covguard-domain` (policy evaluation)
 - `covguard-adapters-diff` / `covguard-adapters-coverage`
 - `covguard-render` (markdown/annotations/SARIF)
-- `covguard-app` (orchestration)
+- `covguard-orchestrator` (orchestration)
+- `covguard-app` (compatibility facade)
 - `covguard-cli` (clap + IO + exit mapping)
 - `xtask` (schema generation, fixtures)
 

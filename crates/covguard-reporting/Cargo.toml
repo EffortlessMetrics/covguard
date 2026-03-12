@@ -1,0 +1,20 @@
+[package]
+name = "covguard-reporting"
+description = "Report construction for covguard (standard + sensor schemas)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-reporting"
+keywords = ["coverage", "reporting", "testing", "ci", "coverage-gating"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+chrono.workspace = true
+covguard-domain = { path = "../covguard-domain", version = "0.1.0" }
+covguard-output = { path = "../covguard-output", version = "0.1.0" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+serde_json.workspace = true

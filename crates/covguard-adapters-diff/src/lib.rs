@@ -5,7 +5,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::RangeInclusive;
+use std::path::Path;
 
+use covguard_paths::normalize_diff_path;
+use covguard_ports::{DiffParseResult as PortDiffParseResult, DiffProvider};
 use thiserror::Error;
 
 // ============================================================================
@@ -39,6 +42,43 @@ pub enum DiffError {
     IoError(String),
 }
 
+/// Default diff provider backed by git subprocess calls and unified diff parsing.
+pub struct GitDiffProvider;
+
+impl DiffProvider for GitDiffProvider {
+    fn parse_patch(&self, text: &str) -> Result<PortDiffParseResult, String> {
+        parse_patch_with_meta(text)
+            .map(|parsed| PortDiffParseResult {
+                changed_ranges: parsed.changed_ranges,
+                binary_files: parsed.binary_files,
+            })
+            .map_err(|e| e.to_string())
+    }
+
+    fn load_diff_from_git(
+        &self,
+        base: &str,
+        head: &str,
+        repo_root: &Path,
+    ) -> Result<String, String> {
+        load_diff_from_git(base, head, repo_root).map_err(|e| e.to_string())
+    }
+}
+
+/// Load unified diff text from git for a `base..head` range.
+///
+/// This is an adapter boundary for subprocess interaction.
+pub fn load_diff_from_git(base: &str, head: &str, repo_root: &Path) -> Result<String, DiffError> {
+    let output = std::process::Command::new("git")
+        .current_dir(repo_root)
+        .args(["diff", base, head])
+        .output()
+        .map_err(|e| DiffError::IoError(e.to_string()))?;
+    // Preserve prior CLI behavior: if git exits non-zero, still return stdout.
+    // The caller can then treat empty output as "no changed lines".
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 // ============================================================================
 // Path Normalization
 // ============================================================================
@@ -61,79 +101,14 @@ pub enum DiffError {
 /// assert_eq!(normalize_path("src\\lib.rs"), "src/lib.rs");
 /// ```
 pub fn normalize_path(path: &str) -> String {
-    let path = path.trim();
-
-    // Convert backslashes to forward slashes
-    let path = path.replace('\\', "/");
-
-    // Strip a/ or b/ prefix (git diff convention)
-    let path = path
-        .strip_prefix("b/")
-        .or_else(|| path.strip_prefix("a/"))
-        .unwrap_or(&path);
-
-    // Remove leading ./
-    let path = path.strip_prefix("./").unwrap_or(path);
-
-    path.to_string()
+    normalize_diff_path(path)
 }
 
 // ============================================================================
 // Range Merging
 // ============================================================================
-
-/// Merge overlapping or adjacent ranges into a minimal set.
-///
-/// Input ranges do not need to be sorted; output will be sorted and
-/// contain no overlapping or adjacent ranges.
-///
-/// # Examples
-///
-/// ```
-/// use covguard_adapters_diff::merge_ranges;
-///
-/// // These ranges are all adjacent/overlapping: 1..=4 (from 1..=3, 2..=4),
-/// // then 5..=7 is adjacent to 1..=4, and 8..=10 is adjacent to 5..=7,
-/// // so everything merges into one range.
-/// let ranges = vec![1..=3, 5..=7, 2..=4, 8..=10];
-/// let merged = merge_ranges(ranges);
-/// assert_eq!(merged, vec![1..=10]);
-///
-/// // Non-adjacent ranges stay separate
-/// let ranges = vec![1..=3, 10..=15];
-/// let merged = merge_ranges(ranges);
-/// assert_eq!(merged, vec![1..=3, 10..=15]);
-/// ```
-pub fn merge_ranges(mut ranges: Vec<RangeInclusive<u32>>) -> Vec<RangeInclusive<u32>> {
-    if ranges.is_empty() {
-        return Vec::new();
-    }
-
-    // Sort by start, then by end
-    ranges.sort_by(|a, b| a.start().cmp(b.start()).then(a.end().cmp(b.end())));
-
-    let mut merged: Vec<RangeInclusive<u32>> = Vec::with_capacity(ranges.len());
-
-    for range in ranges {
-        if let Some(last) = merged.last_mut() {
-            // Check if ranges overlap or are adjacent
-            // Adjacent: last.end + 1 == range.start
-            // Overlapping: range.start <= last.end
-            if *range.start() <= last.end().saturating_add(1) {
-                // Extend the last range if needed
-                if *range.end() > *last.end() {
-                    *last = *last.start()..=*range.end();
-                }
-            } else {
-                merged.push(range);
-            }
-        } else {
-            merged.push(range);
-        }
-    }
-
-    merged
-}
+/// Re-exported range-merging utility for backward compatibility.
+pub use covguard_ranges::merge_ranges;
 
 // ============================================================================
 // Diff Parsing
@@ -316,10 +291,8 @@ pub fn parse_patch_with_meta(text: &str) -> Result<DiffParseResult, DiffError> {
     // Convert line lists to merged ranges
     let mut ranges: ChangedRanges = BTreeMap::new();
     for (file, lines) in result {
-        if !lines.is_empty() {
-            let line_ranges: Vec<RangeInclusive<u32>> = lines.into_iter().map(|l| l..=l).collect();
-            ranges.insert(file, merge_ranges(line_ranges));
-        }
+        let line_ranges: Vec<RangeInclusive<u32>> = lines.into_iter().map(|l| l..=l).collect();
+        ranges.insert(file, merge_ranges(line_ranges));
     }
     // Remove any binary files from the ranges
     for binary in &binary_files {
@@ -358,6 +331,8 @@ fn parse_hunk_header(line: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use covguard_ports::DiffProvider;
+    use std::fs;
 
     #[test]
     fn test_normalize_path_b_prefix() {
@@ -392,51 +367,6 @@ mod tests {
     #[test]
     fn test_normalize_path_no_change() {
         assert_eq!(normalize_path("src/lib.rs"), "src/lib.rs");
-    }
-
-    #[test]
-    fn test_merge_ranges_empty() {
-        let result = merge_ranges(vec![]);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_merge_ranges_single() {
-        let result = merge_ranges(vec![1..=5]);
-        assert_eq!(result, vec![1..=5]);
-    }
-
-    #[test]
-    fn test_merge_ranges_non_overlapping() {
-        let result = merge_ranges(vec![1..=3, 7..=10]);
-        assert_eq!(result, vec![1..=3, 7..=10]);
-    }
-
-    #[test]
-    fn test_merge_ranges_overlapping() {
-        let result = merge_ranges(vec![1..=5, 3..=8]);
-        assert_eq!(result, vec![1..=8]);
-    }
-
-    #[test]
-    fn test_merge_ranges_adjacent() {
-        let result = merge_ranges(vec![1..=3, 4..=6]);
-        assert_eq!(result, vec![1..=6]);
-    }
-
-    #[test]
-    fn test_merge_ranges_unsorted() {
-        // After sorting and merging: 1..=3, 2..=4 -> 1..=4
-        // 5..=7, 8..=10 are adjacent (7+1=8), so merge to 5..=10
-        // 1..=4 and 5..=10 are adjacent (4+1=5), so merge to 1..=10
-        let result = merge_ranges(vec![5..=7, 1..=3, 2..=4, 8..=10]);
-        assert_eq!(result, vec![1..=10]);
-    }
-
-    #[test]
-    fn test_merge_ranges_contained() {
-        let result = merge_ranges(vec![1..=10, 3..=5]);
-        assert_eq!(result, vec![1..=10]);
     }
 
     #[test]
@@ -621,6 +551,30 @@ Binary files a/assets/logo.png and b/assets/logo.png differ
     }
 
     #[test]
+    fn test_parse_patch_binary_files_marker_dev_null() {
+        let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222
+Binary files a/assets/logo.png and /dev/null differ
+"#;
+
+        let result = parse_patch_with_meta(diff).unwrap();
+        assert!(result.changed_ranges.is_empty());
+        assert!(result.binary_files.is_empty());
+    }
+
+    #[test]
+    fn test_parse_patch_binary_files_marker_without_and() {
+        let diff = r#"diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222
+Binary files a/assets/logo.png differ
+"#;
+
+        let result = parse_patch_with_meta(diff).unwrap();
+        assert!(result.changed_ranges.is_empty());
+        assert!(result.binary_files.is_empty());
+    }
+
+    #[test]
     fn test_parse_patch_git_binary_patch_marker() {
         let diff = r#"diff --git a/assets/data.bin b/assets/data.bin
 index 1111111..2222222
@@ -635,6 +589,35 @@ HcmV?d00001
     }
 
     #[test]
+    fn test_parse_patch_malformed_hunk_header_returns_error() {
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+index 1111111..2222222 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,1 @@
++line
+"#;
+
+        let result = parse_patch(diff);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_patch_empty_line_in_hunk() {
+        let diff = "diff --git a/src/lib.rs b/src/lib.rs\n\
+index 1111111..2222222 100644\n\
+--- a/src/lib.rs\n\
++++ b/src/lib.rs\n\
+@@ -1,1 +1,3 @@\n\
++line1\n\
+\n\
++line2\n";
+
+        let ranges = parse_patch(diff).unwrap();
+        assert_eq!(ranges.get("src/lib.rs"), Some(&vec![1..=1, 3..=3]));
+    }
+
+    #[test]
     fn test_parse_hunk_header_with_counts() {
         let line = "@@ -10,5 +20,8 @@ fn context()";
         assert_eq!(parse_hunk_header(line), Some(20));
@@ -644,6 +627,12 @@ HcmV?d00001
     fn test_parse_hunk_header_without_counts() {
         let line = "@@ -1 +1 @@";
         assert_eq!(parse_hunk_header(line), Some(1));
+    }
+
+    #[test]
+    fn test_parse_hunk_header_missing_plus_returns_none() {
+        let line = "@@ -10,5 @@ fn context()";
+        assert_eq!(parse_hunk_header(line), None);
     }
 
     #[test]
@@ -711,6 +700,99 @@ fn main() {
         // Line 2 is the added line
         assert_eq!(ranges.get("src/lib.rs"), Some(&vec![2..=2]));
     }
+
+    #[test]
+    fn test_load_diff_from_git_bad_repo_path_returns_io_error() {
+        let temp = std::env::temp_dir().join(format!(
+            "covguard-diff-adapter-missing-{}",
+            std::process::id()
+        ));
+        let err = load_diff_from_git("HEAD~1", "HEAD", &temp).expect_err("expected error");
+        assert!(matches!(err, DiffError::IoError(_)));
+    }
+
+    #[test]
+    fn test_load_diff_from_git_success_in_temp_repo() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("covguard-diff-adapter-{unique}"));
+        fs::create_dir_all(&root).expect("create temp dir");
+
+        let init = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["init"])
+            .output()
+            .expect("git init");
+        assert!(init.status.success());
+
+        let user_name = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["config", "user.name", "covguard-test"])
+            .output()
+            .expect("git config user.name");
+        assert!(user_name.status.success());
+
+        let user_email = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["config", "user.email", "covguard-test@example.com"])
+            .output()
+            .expect("git config user.email");
+        assert!(user_email.status.success());
+
+        fs::write(root.join("a.txt"), "line1\n").expect("write initial file");
+        let add_first = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["add", "a.txt"])
+            .output()
+            .expect("git add first");
+        assert!(add_first.status.success());
+
+        let commit_first = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["commit", "-m", "first"])
+            .output()
+            .expect("git commit first");
+        assert!(commit_first.status.success());
+
+        fs::write(root.join("a.txt"), "line1\nline2\n").expect("write changed file");
+        let add_second = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["add", "a.txt"])
+            .output()
+            .expect("git add second");
+        assert!(add_second.status.success());
+
+        let commit_second = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["commit", "-m", "second"])
+            .output()
+            .expect("git commit second");
+        assert!(commit_second.status.success());
+
+        let diff = load_diff_from_git("HEAD~1", "HEAD", &root).expect("load diff");
+        assert!(diff.contains("diff --git"));
+        assert!(diff.contains("+++ b/a.txt"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_git_diff_provider_parse_patch() {
+        let provider = GitDiffProvider;
+        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/src/lib.rs
+@@ -0,0 +1,1 @@
++fn main() {}
+"#;
+
+        let parsed = provider.parse_patch(diff).expect("parse via provider");
+        assert_eq!(parsed.changed_ranges.get("src/lib.rs"), Some(&vec![1..=1]));
+        assert!(parsed.binary_files.is_empty());
+    }
 }
 
 // ============================================================================
@@ -723,57 +805,6 @@ mod proptests {
     use proptest::prelude::*;
 
     proptest! {
-        #[test]
-        fn merge_ranges_produces_sorted_output(ranges in prop::collection::vec(1u32..1000, 0..50)) {
-            let input: Vec<RangeInclusive<u32>> = ranges.iter().map(|&x| x..=x).collect();
-            let merged = merge_ranges(input);
-
-            // Check sorted
-            for window in merged.windows(2) {
-                prop_assert!(window[0].end() < window[1].start());
-            }
-        }
-
-        #[test]
-        fn merge_ranges_produces_non_overlapping_output(ranges in prop::collection::vec((1u32..500, 1u32..500), 0..30)) {
-            let input: Vec<RangeInclusive<u32>> = ranges
-                .into_iter()
-                .map(|(start, len)| start..=(start + len))
-                .collect();
-            let merged = merge_ranges(input);
-
-            // Check non-overlapping and non-adjacent
-            for window in merged.windows(2) {
-                let gap = *window[1].start() as i64 - *window[0].end() as i64;
-                prop_assert!(gap >= 2, "Ranges should not be adjacent or overlapping: gap={}", gap);
-            }
-        }
-
-        #[test]
-        fn merge_ranges_is_idempotent(ranges in prop::collection::vec((1u32..500, 1u32..100), 0..20)) {
-            let input: Vec<RangeInclusive<u32>> = ranges
-                .into_iter()
-                .map(|(start, len)| start..=(start + len))
-                .collect();
-
-            let merged_once = merge_ranges(input.clone());
-            let merged_twice = merge_ranges(merged_once.clone());
-
-            prop_assert_eq!(merged_once, merged_twice, "merge_ranges should be idempotent");
-        }
-
-        #[test]
-        fn merge_ranges_preserves_all_values(values in prop::collection::vec(1u32..1000, 1..50)) {
-            let input: Vec<RangeInclusive<u32>> = values.iter().map(|&x| x..=x).collect();
-            let merged = merge_ranges(input);
-
-            // Every input value should be contained in some output range
-            for val in &values {
-                let contained = merged.iter().any(|r| r.contains(val));
-                prop_assert!(contained, "Value {} should be in merged ranges", val);
-            }
-        }
-
         #[test]
         fn normalize_path_never_panics(path in ".*") {
             let _ = normalize_path(&path);

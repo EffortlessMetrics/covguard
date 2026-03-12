@@ -1,0 +1,16 @@
+[package]
+name = "covguard-paths"
+description = "Reusable path normalization helpers for covguard adapters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-paths"
+keywords = ["coverage", "diff", "paths"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+

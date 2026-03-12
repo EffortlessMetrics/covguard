@@ -17,6 +17,7 @@ cargo +nightly install cargo-fuzz
 |--------|---------------|
 | `fuzz_diff_parser` | Tests `covguard-adapters-diff::parse_patch` with arbitrary byte input. The parser must never panic regardless of input. |
 | `fuzz_lcov_parser` | Tests `covguard-adapters-coverage::parse_lcov` with arbitrary byte input. The parser must never panic regardless of input. |
+| `fuzz_ranges_merge` | Tests `covguard-ranges::merge_ranges` with arbitrary range inputs. The merger must never panic regardless of input. |
 
 Both targets convert raw bytes to UTF-8 strings (skipping invalid UTF-8) and feed them to the respective parsers. Errors are expected and acceptable; panics are not.
 
@@ -28,6 +29,7 @@ Run a specific fuzz target:
 cd fuzz
 cargo +nightly fuzz run fuzz_diff_parser
 cargo +nightly fuzz run fuzz_lcov_parser
+cargo +nightly fuzz run fuzz_ranges_merge
 ```
 
 Run with a time limit (e.g., 60 seconds):
@@ -54,6 +56,7 @@ Seed files in `corpus/` provide starting inputs for the fuzzer. The fuzzer uses 
 
 - `corpus/fuzz_diff_parser/` - Valid unified diff/patch files
 - `corpus/fuzz_lcov_parser/` - Valid LCOV coverage report files
+- `corpus/fuzz_ranges_merge/` - Seed inputs for range merging
 
 ### Current Seed Files
 
@@ -62,6 +65,7 @@ Seed files in `corpus/` provide starting inputs for the fuzzer. The fuzzer uses 
 | `fuzz_diff_parser/simple_added.patch` | Minimal patch adding a new file |
 | `fuzz_lcov_parser/covered.info` | LCOV file with covered lines (DA:n,1) |
 | `fuzz_lcov_parser/uncovered.info` | LCOV file with uncovered lines (DA:n,0) |
+| `fuzz_ranges_merge/seed.txt` | Minimal seed for range merging |
 
 ### Adding New Corpus Entries
 
@@ -103,6 +107,7 @@ For CI pipelines, run each target with a time limit:
 ```bash
 cargo +nightly fuzz run fuzz_diff_parser -- -max_total_time=30
 cargo +nightly fuzz run fuzz_lcov_parser -- -max_total_time=30
+cargo +nightly fuzz run fuzz_ranges_merge -- -max_total_time=30
 ```
 
 Check for regressions against the corpus without fuzzing:
@@ -110,6 +115,7 @@ Check for regressions against the corpus without fuzzing:
 ```bash
 cargo +nightly fuzz run fuzz_diff_parser corpus/fuzz_diff_parser/ -- -runs=0
 cargo +nightly fuzz run fuzz_lcov_parser corpus/fuzz_lcov_parser/ -- -runs=0
+cargo +nightly fuzz run fuzz_ranges_merge corpus/fuzz_ranges_merge/ -- -runs=0
 ```
 
 ## Troubleshooting

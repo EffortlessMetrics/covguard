@@ -1,0 +1,17 @@
+[package]
+name = "covguard-policy"
+description = "Shared policy and profile contracts for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-policy"
+keywords = ["coverage", "policy", "diff", "testing", "interoperability"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+

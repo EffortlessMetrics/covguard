@@ -108,7 +108,7 @@ covguard check \
   --root <path>                # Repo root for ignore directives + git diff
   --path-strip <prefix>        # Repeatable path prefix to strip from LCOV SF paths
   --config <path>              # Optional config file (auto-discovers covguard.toml)
-  --profile <oss|moderate|team|strict>
+  --profile <oss|moderate|team|strict|lenient>
   --scope <added|touched>
   --threshold <0-100>
   --no-ignore                  # Disable ignore directives

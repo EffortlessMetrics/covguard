@@ -178,6 +178,14 @@ Feature: Diff coverage ratchet
   # Edge Cases
   # ============================================================================
 
+  Scenario: Overlapping hunks do not double-count lines
+    Given a diff with overlapping hunks in "src/lib.rs"
+    And an LCOV report where all lines are covered
+    When covguard checks coverage
+    Then changed_lines_total is 3
+    And covered_lines is 3
+    And findings count is 0
+
   Scenario: Empty diff produces pass verdict
     Given an empty diff
     And an LCOV report with any values

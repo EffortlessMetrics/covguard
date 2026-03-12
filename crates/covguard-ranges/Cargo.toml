@@ -1,0 +1,18 @@
+[package]
+name = "covguard-ranges"
+description = "Range merging utilities for covguard diff coverage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/covguard-ranges"
+keywords = ["coverage", "diff", "ranges"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+rust-version.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+proptest = "1.10.0"
