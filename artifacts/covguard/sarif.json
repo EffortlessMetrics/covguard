@@ -1,0 +1,119 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "covguard",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/covguard/covguard",
+          "rules": [
+            {
+              "id": "covguard.diff.uncovered_line",
+              "name": "UncoveredLine",
+              "shortDescription": {
+                "text": "Uncovered changed line"
+              },
+              "fullDescription": {
+                "text": "A line that was changed in the diff has no test coverage."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#uncovered_line",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "covguard.diff.coverage_below_threshold",
+              "name": "CoverageBelowThreshold",
+              "shortDescription": {
+                "text": "Diff coverage below threshold"
+              },
+              "fullDescription": {
+                "text": "The diff coverage percentage is below the configured threshold."
+              },
+              "helpUri": "https://github.com/covguard/covguard/blob/main/docs/codes.md#coverage_below_threshold",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "covguard.diff.coverage_below_threshold",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "Diff coverage 0.0% is below threshold 80.0%."
+          },
+          "locations": []
+        },
+        {
+          "ruleId": "covguard.diff.uncovered_line",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Uncovered changed line (hits=0)."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "covguard.diff.uncovered_line",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Uncovered changed line (hits=0)."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 2
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "covguard.diff.uncovered_line",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Uncovered changed line (hits=0)."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 3
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
