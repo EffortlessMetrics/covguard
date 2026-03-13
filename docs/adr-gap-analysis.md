@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-After reviewing the codebase across domain logic, CLI, configuration, paths, and rendering components, I identified **10 potential ADRs** that are currently undocumented. Of these, **4 are high priority**, **4 are medium priority**, and **2 are low priority**.
+After reviewing the codebase across domain logic, CLI, configuration, paths, and rendering components, I identified **10 potential ADRs** that were undocumented. Of these, **4 high priority ADRs have been completed** (ADR-009 through ADR-012), leaving **4 medium priority** and **2 low priority** ADRs remaining.
 
 ## Existing ADRs (For Reference)
 
@@ -22,94 +22,45 @@ After reviewing the codebase across domain logic, CLI, configuration, paths, and
 
 ---
 
-## Identified Missing ADRs
+## Completed ADRs (Previously Identified as Missing)
 
-### HIGH PRIORITY
+### HIGH PRIORITY — ✅ COMPLETED
 
-#### 1. Exit Code Strategy
+#### 1. Exit Code Strategy — ✅ ADR-009
 
-**Priority**: High  
-**Category**: CLI/UX
+**Status**: Completed as [ADR-009](adr/ADR-009.md)
 
-**Rationale**:  
-The CLI uses a specific exit code scheme (0=pass/warn, 1=tool error, 2=policy fail) that differs from typical Unix conventions. This is a user-facing contract that affects CI integration and should be formally documented.
-
-**Evidence**:
-- [`crates/covguard-cli/src/main.rs:223-227`](crates/covguard-cli/src/main.rs:223) explicitly defines exit codes
-- [`crates/covguard-orchestrator/src/lib.rs:186-189`](crates/covguard-orchestrator/src/lib.rs:186) documents exit codes in `CheckResult`
-- Cockpit mode introduces additional exit code behavior (always exits 0 if receipt written)
-
-**Key Decisions**:
-- 0: Pass or warn (non-blocking)
-- 1: Tool/runtime error (I/O, parse failure)
-- 2: Policy fail (blocking findings)
-- Cockpit mode: Always 0 on successful receipt write
+The CLI exit code scheme (0=pass/warn, 1=tool error, 2=policy fail) is now formally documented.
 
 ---
 
-#### 2. Error Handling and Propagation Strategy
+#### 2. Error Handling and Propagation Strategy — ✅ ADR-010
 
-**Priority**: High  
-**Category**: Architecture
+**Status**: Completed as [ADR-010](adr/ADR-010.md)
 
-**Rationale**:  
-The codebase uses `thiserror` consistently across all crates with a hierarchical error propagation pattern. Each layer has its own error type that wraps lower-level errors. This is a significant architectural decision affecting maintainability and debugging.
-
-**Evidence**:
-- [`crates/covguard-cli/src/main.rs:181-221`](crates/covguard-cli/src/main.rs:181) - `CliError` enum
-- [`crates/covguard-orchestrator/src/lib.rs:196-221`](crates/covguard-orchestrator/src/lib.rs:196) - `AppError` enum
-- [`crates/covguard-config/src/lib.rs:20-34`](crates/covguard-config/src/lib.rs:20) - `ConfigError` enum
-- [`crates/covguard-adapters-diff/src/lib.rs:33-43`](crates/covguard-adapters-diff/src/lib.rs:33) - `DiffError` enum
-- [`crates/covguard-adapters-coverage/src/lib.rs:27-36`](crates/covguard-adapters-coverage/src/lib.rs:27) - `LcovError` enum
-- [`crates/covguard-adapters-artifacts/src/lib.rs:19-40`](crates/covguard-adapters-artifacts/src/lib.rs:19) - `ArtifactWriteError` enum
-
-**Key Decisions**:
-- Use `thiserror` crate for all error types
-- Each crate defines its own error enum
-- Errors propagate upward with `From` trait implementations
-- Error codes (e.g., `covguard.diff.uncovered_line`) are separate from error types
+The `thiserror`-based hierarchical error propagation pattern is now formally documented.
 
 ---
 
-#### 3. Configuration Precedence Hierarchy
+#### 3. Configuration Precedence Hierarchy — ✅ ADR-011
 
-**Priority**: High  
-**Category**: Configuration
+**Status**: Completed as [ADR-011](adr/ADR-011.md)
 
-**Rationale**:  
-The configuration system has a clear precedence chain (CLI > config file > profile defaults > global defaults) that affects how users interact with the tool. This should be formally documented.
-
-**Evidence**:
-- [`crates/covguard-config/src/lib.rs:256-315`](crates/covguard-config/src/lib.rs:256) - `resolve_config()` function
-- Comment explicitly states: "Precedence: CLI > config file > profile defaults > global defaults"
-
-**Key Decisions**:
-- CLI arguments have highest priority
-- Config file values override profile defaults
-- Profile defaults override global defaults
-- `CliOverrides` struct uses `Option<T>` to distinguish "not set" from "set to default"
+The configuration precedence chain (CLI > config file > profile defaults > global defaults) is now formally documented.
 
 ---
 
-#### 4. Determinism Guarantees
+#### 4. Determinism Guarantees — ✅ ADR-012
 
-**Priority**: High  
-**Category**: Output Contract
+**Status**: Completed as [ADR-012](adr/ADR-012.md)
 
-**Rationale**:  
-Deterministic output is critical for CI/CD reliability and snapshot testing. The sorting algorithm for findings is a normative contract that should be documented as an ADR.
-
-**Evidence**:
-- [`crates/covguard-domain/src/lib.rs:287-328`](crates/covguard-domain/src/lib.rs:287) - `sort_findings()` function
-- [`contracts/rules/determinism.md`](contracts/rules/determinism.md:1) documents the sort order
-- Findings sorted by: severity > path > line > check_id > code > message
-
-**Key Decisions**:
-- Findings must be sorted deterministically for byte-stable output
-- Sort order: severity (error > warn > info) > path (lexical) > line (numeric) > check_id > code > message
-- Timing fields (`started_at`, `ended_at`, `duration_ms`) are excluded from determinism contracts
+The deterministic output requirements and findings sort order are now formally documented.
 
 ---
+
+## Remaining Missing ADRs
+
+### MEDIUM PRIORITY
 
 ### MEDIUM PRIORITY
 
@@ -247,24 +198,24 @@ Fuzz targets are designed with a specific philosophy (parsers must never panic).
 
 ## Summary Table
 
-| Priority | ADR Title | Category | Effort |
-|----------|-----------|----------|--------|
-| High | Exit Code Strategy | CLI/UX | Small |
-| High | Error Handling and Propagation | Architecture | Medium |
-| High | Configuration Precedence Hierarchy | Configuration | Small |
-| High | Determinism Guarantees | Output Contract | Small |
-| Medium | Path Normalization Strategy | Cross-platform | Small |
-| Medium | CLI Operation Modes | CLI/UX | Small |
-| Medium | Multi-layered Testing Strategy | QA | Medium |
-| Medium | Output Truncation Strategy | Output Contract | Small |
-| Low | Error Code Registry | UX/Documentation | Small |
-| Low | Fuzzing Target Design | QA | Small |
+| Priority | ADR Title | Category | Effort | Status |
+|----------|-----------|----------|--------|--------|
+| High | Exit Code Strategy | CLI/UX | Small | ✅ ADR-009 |
+| High | Error Handling and Propagation | Architecture | Medium | ✅ ADR-010 |
+| High | Configuration Precedence Hierarchy | Configuration | Small | ✅ ADR-011 |
+| High | Determinism Guarantees | Output Contract | Small | ✅ ADR-012 |
+| Medium | Path Normalization Strategy | Cross-platform | Small | Pending |
+| Medium | CLI Operation Modes | CLI/UX | Small | Pending |
+| Medium | Multi-layered Testing Strategy | QA | Medium | Pending |
+| Medium | Output Truncation Strategy | Output Contract | Small | Pending |
+| Low | Error Code Registry | UX/Documentation | Small | Pending |
+| Low | Fuzzing Target Design | QA | Small | Pending |
 
 ---
 
 ## Recommendations
 
-1. **Prioritize High-Items First**: Exit Code Strategy and Error Handling are user-facing contracts that affect CI integration.
+1. ~~**Prioritize High-Items First**: Exit Code Strategy and Error Handling are user-facing contracts that affect CI integration.~~ ✅ Completed.
 
 2. **Leverage Existing Documentation**: Several topics (determinism, paths, truncation) already have contracts documentation that can be expanded into ADRs.
 
