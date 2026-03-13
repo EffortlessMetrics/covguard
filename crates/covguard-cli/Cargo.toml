@@ -24,15 +24,15 @@ covguard-output-features.workspace = true
 covguard-adapters-artifacts.workspace = true
 covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.1.0" }
 covguard-adapters-repo = { path = "../covguard-adapters-repo", version = "0.1.0" }
-clap = { version = "4.5.57", features = ["derive"] }
+clap = { version = "4.5.60", features = ["derive"] }
 chrono.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
-predicates = "3.1.3"
-tempfile = "3.24.0"
+assert_cmd = "2.2.0"
+predicates = "3.1.4"
+tempfile = "3.27.0"
 serde_json = { workspace = true }
 proptest = "1.10.0"
 uselesskey = { workspace = true }

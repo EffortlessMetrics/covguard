@@ -14,7 +14,7 @@ publish = false
 
 [dependencies]
 covguard-types = { path = "../crates/covguard-types" }
-clap = { version = "4.5.57", features = ["derive"] }
+clap = { version = "4.5.60", features = ["derive"] }
 serde_json.workspace = true
-jsonschema = "0.41.0"
-anyhow = "1.0.101"
+jsonschema = "0.45.0"
+anyhow = "1.0.102"
