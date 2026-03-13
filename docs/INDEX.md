@@ -24,17 +24,31 @@ covguard is a diff-scoped coverage gate that answers whether changed lines are c
 - [Roadmap](roadmap.md) — Vision, goals, release history, and future milestones
 - [Now/Next/Later](now-next-later.md) — Current priorities and upcoming work
 
+### Audits & Analyses
+
+- [Crate README Audit](crate-readme-audit.md) — Crate README consistency audit results
+- [ADR Gap Analysis](adr-gap-analysis.md) — Analysis of missing Architecture Decision Records
+
+## Release Documentation
+
+- [Release Audit](release-audit.md) — Cargo.toml audit results and publishing readiness
+- [Release Checklist](release-checklist.md) — Step-by-step publishing guide
+
 ## Architecture Decision Records
 
 ADRs document significant architectural decisions:
 
 | ADR | Title | Status |
 |-----|-------|--------|
+| [ADR-000](adr/ADR-000.md) | ADR Template | Template |
 | [ADR-001](adr/ADR-001.md) | Hexagonal/Clean Architecture | Accepted |
 | [ADR-002](adr/ADR-002.md) | Multi-crate Workspace Structure | Accepted |
 | [ADR-003](adr/ADR-003.md) | LCOV as Primary Coverage Format | Accepted |
 | [ADR-004](adr/ADR-004.md) | Unified Diff Format for Input | Accepted |
 | [ADR-005](adr/ADR-005.md) | Schema-compliant JSON Output | Accepted |
+| [ADR-006](adr/ADR-006.md) | Dual Licensing | Accepted |
+| [ADR-007](adr/ADR-007.md) | Built-in Profiles | Accepted |
+| [ADR-008](adr/ADR-008.md) | Ignore Directives | Accepted |
 
 See [adr/README.md](adr/README.md) for the full index and ADR guidelines.
 
