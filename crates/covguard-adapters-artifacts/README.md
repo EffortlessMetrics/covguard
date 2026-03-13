@@ -1,36 +1,48 @@
 # covguard-adapters-artifacts
 
-Filesystem adapters for covguard artifact output.
+[![crates.io](https://img.shields.io/crates/v/covguard-adapters-artifacts.svg)](https://crates.io/crates/covguard-adapters-artifacts)
+[![docs.rs](https://docs.rs/covguard-adapters-artifacts/badge.svg)](https://docs.rs/covguard-adapters-artifacts)
+[![License: Apache-2.0 OR MIT](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue.svg)](LICENSE)
 
-This crate owns side effects for:
+Filesystem artifact adapters for covguard reports and fallback outputs.
 
-- Writing canonical JSON receipts (`report.json`)
-- Writing rendered comment outputs (markdown / SARIF)
-- Writing raw repro artifacts under `artifacts/covguard/raw`
+## Overview
 
-The adapter provides both convenience free functions and a lightweight
-`FsArtifactWriter` handle for dependency-injected wiring.
+This crate centralizes filesystem output behavior for reports and related artifacts so CLI and other adapters can share the same contract. It provides utilities for writing JSON reports, fallback receipts, and raw debugging artifacts to disk.
 
-## Public API
+In the hexagonal architecture, this crate implements the `ArtifactWriter` port for filesystem-based persistence.
 
-- `write_report`
-- `write_fallback_receipt`
-- `write_text`
-- `write_raw_artifacts`
-- `write_raw_artifacts_to`
-- `ensure_parent_dir`
- 
+## Usage
 
-## Example
+Add to your `Cargo.toml`:
 
-```rust
-use covguard_adapters_artifacts::{FsArtifactWriter, write_fallback_receipt};
-use covguard_types::Report;
-
-let writer = FsArtifactWriter::new();
-let report = Report::default();
-writer.write_report("artifacts/covguard/report.json", &report)?;
-writer.write_text("artifacts/covguard/comment.md", "# covguard report")?;
-# Ok::<(), covguard_adapters_artifacts::ArtifactWriteError>(())
+```toml
+[dependencies]
+covguard-adapters-artifacts = "0.1"
 ```
 
+### Example
+
+```rust
+use covguard_adapters_artifacts::{write_report, write_raw_artifacts, FsArtifactWriter};
+use covguard_types::Report;
+
+// Write a report to disk
+let report = Report::default();
+write_report("artifacts/covguard/report.json", &report)?;
+
+// Write raw artifacts for debugging
+write_raw_artifacts(&diff_content, &lcov_texts)?;
+
+// Use the artifact writer directly
+let writer = FsArtifactWriter::new();
+```
+
+## Documentation
+
+- [API Documentation](https://docs.rs/covguard-adapters-artifacts)
+- [Main Repository](https://github.com/EffortlessMetrics/covguard)
+
+## License
+
+Licensed under either of Apache License, Version 2.0 or MIT license at your option.

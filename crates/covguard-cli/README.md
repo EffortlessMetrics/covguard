@@ -1,18 +1,75 @@
-# covguard (CLI)
+# covguard
 
-Command-line interface for covguard.
+[![crates.io](https://img.shields.io/crates/v/covguard.svg)](https://crates.io/crates/covguard)
+[![docs.rs](https://docs.rs/covguard/badge.svg)](https://docs.rs/covguard)
+[![License: Apache-2.0 OR MIT](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue.svg)](../../LICENSE)
 
-## Commands
+A diff-scoped coverage gate for pull requests. Answers: "Did this PR add or change lines that are not covered by tests?"
 
-- `covguard check`: run diff-scoped coverage analysis
-- `covguard explain <code>`: explain covguard error codes
+## Overview
 
-## Outputs
+`covguard` is a CLI tool that checks whether changed lines in a pull request are covered by tests. It consumes a diff (base↔head refs or patch file) and LCOV coverage data, then emits a canonical receipt plus optional PR outputs (markdown, annotations, SARIF).
 
-- JSON report (`--out`)
-- Markdown comment (`--md`)
-- SARIF report (`--sarif`)
+**Not**: A coverage generator or global coverage policy tool. It's a ratchet-by-default sensor that only evaluates added lines unless configured otherwise.
 
-## Notes
+## Installation
 
-This crate is the published `covguard` binary package.
+```bash
+cargo install covguard
+```
+
+## Usage
+
+### Basic check with patch file
+
+```bash
+covguard check \
+  --diff-file patch.diff \
+  --lcov coverage.info \
+  --out report.json
+```
+
+### With git refs and markdown output
+
+```bash
+covguard check \
+  --base "$BASE_SHA" --head "$HEAD_SHA" \
+  --lcov coverage.info \
+  --out report.json \
+  --md comment.md
+```
+
+### Commands
+
+- `covguard check` — Run diff-scoped coverage analysis
+- `covguard explain <code>` — Explain covguard error codes
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--diff-file <PATH>` | Path to diff/patch file |
+| `--base <SHA>` | Base git ref (alternative to `--diff-file`) |
+| `--head <SHA>` | Head git ref (alternative to `--diff-file`) |
+| `--lcov <PATH>` | Path to LCOV coverage file |
+| `--out <PATH>` | Output path for JSON report |
+| `--md <PATH>` | Output path for markdown comment |
+| `--sarif <PATH>` | Output path for SARIF report |
+| `--threshold <PCT>` | Coverage threshold percentage (default: 80) |
+| `--scope <SCOPE>` | Analysis scope: `added` or `touched` (default: `added`) |
+| `--profile <PROFILE>` | Policy profile: `oss`, `moderate`, `team`, `strict`, `lenient` |
+
+### Exit Codes
+
+- `0` — Pass (or warn when not fail-configured)
+- `2` — Policy fail (blocking findings)
+- `1` — Tool/runtime error (I/O, parse failure)
+
+## Documentation
+
+- [API Documentation](https://docs.rs/covguard)
+- [Main Repository](https://github.com/covguard/covguard)
+
+## License
+
+Licensed under either of Apache License, Version 2.0 or MIT license at your option.
