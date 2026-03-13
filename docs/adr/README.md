@@ -19,6 +19,9 @@ An ADR is a document that captures an important architectural decision along wit
 | [ADR-003](ADR-003.md) | LCOV as Primary Coverage Format | Accepted |
 | [ADR-004](ADR-004.md) | Unified Diff Format for Input | Accepted |
 | [ADR-005](ADR-005.md) | Schema-compliant JSON Output | Accepted |
+| [ADR-006](ADR-006.md) | Dual Licensing (Apache-2.0 OR MIT) | Accepted |
+| [ADR-007](ADR-007.md) | Built-in Configuration Profiles | Accepted |
+| [ADR-008](ADR-008.md) | Ignore Directives | Accepted |
 
 ## Creating a New ADR
 
