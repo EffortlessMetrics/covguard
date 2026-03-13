@@ -26,6 +26,12 @@ An ADR is a document that captures an important architectural decision along wit
 | [ADR-010](ADR-010.md) | Error Handling Strategy | Accepted |
 | [ADR-011](ADR-011.md) | Configuration Precedence | Accepted |
 | [ADR-012](ADR-012.md) | Deterministic Output | Accepted |
+| [ADR-013](ADR-013.md) | Path Normalization Strategy | Accepted |
+| [ADR-014](ADR-014.md) | CLI Operation Modes | Accepted |
+| [ADR-015](ADR-015.md) | Multi-layered Testing Strategy | Accepted |
+| [ADR-016](ADR-016.md) | Output Truncation Strategy | Accepted |
+| [ADR-017](ADR-017.md) | Error Code Registry | Accepted |
+| [ADR-018](ADR-018.md) | Fuzzing Target Design | Accepted |
 
 ## Creating a New ADR
 

@@ -53,6 +53,12 @@ ADRs document significant architectural decisions:
 | [ADR-010](adr/ADR-010.md) | Error Handling Strategy | Accepted |
 | [ADR-011](adr/ADR-011.md) | Configuration Precedence | Accepted |
 | [ADR-012](adr/ADR-012.md) | Deterministic Output | Accepted |
+| [ADR-013](adr/ADR-013.md) | Path Normalization Strategy | Accepted |
+| [ADR-014](adr/ADR-014.md) | CLI Operation Modes | Accepted |
+| [ADR-015](adr/ADR-015.md) | Multi-layered Testing Strategy | Accepted |
+| [ADR-016](adr/ADR-016.md) | Output Truncation Strategy | Accepted |
+| [ADR-017](adr/ADR-017.md) | Error Code Registry | Accepted |
+| [ADR-018](adr/ADR-018.md) | Fuzzing Target Design | Accepted |
 
 See [adr/README.md](adr/README.md) for the full index and ADR guidelines.
 
