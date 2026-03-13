@@ -49,6 +49,10 @@ ADRs document significant architectural decisions:
 | [ADR-006](adr/ADR-006.md) | Dual Licensing | Accepted |
 | [ADR-007](adr/ADR-007.md) | Built-in Profiles | Accepted |
 | [ADR-008](adr/ADR-008.md) | Ignore Directives | Accepted |
+| [ADR-009](adr/ADR-009.md) | Exit Code Strategy | Accepted |
+| [ADR-010](adr/ADR-010.md) | Error Handling Strategy | Accepted |
+| [ADR-011](adr/ADR-011.md) | Configuration Precedence | Accepted |
+| [ADR-012](adr/ADR-012.md) | Deterministic Output | Accepted |
 
 See [adr/README.md](adr/README.md) for the full index and ADR guidelines.
 

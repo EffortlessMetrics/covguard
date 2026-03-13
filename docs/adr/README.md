@@ -22,6 +22,10 @@ An ADR is a document that captures an important architectural decision along wit
 | [ADR-006](ADR-006.md) | Dual Licensing (Apache-2.0 OR MIT) | Accepted |
 | [ADR-007](ADR-007.md) | Built-in Configuration Profiles | Accepted |
 | [ADR-008](ADR-008.md) | Ignore Directives | Accepted |
+| [ADR-009](ADR-009.md) | Exit Code Strategy | Accepted |
+| [ADR-010](ADR-010.md) | Error Handling Strategy | Accepted |
+| [ADR-011](ADR-011.md) | Configuration Precedence | Accepted |
+| [ADR-012](ADR-012.md) | Deterministic Output | Accepted |
 
 ## Creating a New ADR
 
