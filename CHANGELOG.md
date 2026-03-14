@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- JaCoCo XML coverage format support for Java projects (`--jacoco` flag)
+- coverage.py JSON coverage format support for Python projects (`--coverage-py` flag)
+- Stdin diff input support with `--diff-file -` for pipe support
+- Enhanced error messages with actionable remediation hints
+- Performance profiling with `--timing` flag for timing diagnostics
+- Criterion benchmarks for performance tracking in `crates/covguard-benchmarks/`
+- Official GitHub Action in `.github/actions/covguard/`
+- GitLab CI templates in `templates/gitlab/`
+- ADR-019: Coverage Format Support documenting JaCoCo and coverage.py decisions
+
+### Changed
+
+- Improved error output now includes suggested fixes and documentation links
+- Performance optimizations for large repository analysis
+
+## [0.3.0] - 2026-03-13
+
+### Added
+
+- Official GitHub Action (`.github/actions/covguard/`)
+- GitLab CI templates (`templates/gitlab/`)
+
+## [0.2.0] - 2026-03-12
+
+### Added
+
+- Stdin diff input support (`--diff-file -`)
+- JaCoCo XML coverage parser for Java ecosystem
+- coverage.py JSON coverage parser for Python ecosystem
+- Enhanced error messages with remediation hints
+- Performance profiling with `--timing` flag
+- Criterion benchmarks for performance tracking
+
 ## [0.1.0] - 2026-03-11
 
 ### Added

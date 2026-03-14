@@ -14,13 +14,16 @@ It answers one question:
 ## Features
 
 - **Diff-scoped analysis** — Only evaluates added or changed lines, not entire codebase
-- **LCOV support** — Consumes standard LCOV coverage reports from any language/tool
-- **Multiple diff sources** — Accepts patch files, stdin, or git refs (base/head SHAs)
+- **Multiple coverage formats** — LCOV, JaCoCo XML (Java), and coverage.py JSON (Python)
+- **Multiple diff sources** — Accepts patch files, stdin (`--diff-file -`), or git refs (base/head SHAs)
 - **Configurable policies** — Built-in profiles (`oss`, `team`, `strict`) or custom TOML config
 - **Multiple output formats** — JSON receipts, markdown PR comments, SARIF, GitHub annotations
 - **Ignore directives** — Support `covguard: ignore` comments in source code
 - **Deterministic output** — Sorted findings for reproducible results
 - **Schema-compliant** — Reports validate against JSON schemas in `contracts/schemas/`
+- **Enhanced error messages** — Actionable remediation hints with documentation links
+- **Performance profiling** — `--timing` flag for diagnosing slow operations
+- **CI/CD integration** — Official GitHub Action and GitLab CI templates included
 - **Fast** — No runtime allocations in hot paths; minimal dependencies
 
 ## Installation
@@ -94,14 +97,16 @@ covguard check [OPTIONS]
 **Diff source options** (choose one):
 | Option | Description |
 |--------|-------------|
-| `--diff-file <PATH>` | Path to unified diff/patch file |
+| `--diff-file <PATH>` | Path to unified diff/patch file, or `-` for stdin |
 | `--base <SHA>` | Base git ref (requires `--head`) |
 | `--head <SHA>` | Head git ref (requires `--base`) |
 
-**Required options**:
+**Coverage input options** (choose one or more):
 | Option | Description |
 |--------|-------------|
 | `--lcov <PATH>` | Path to LCOV coverage file (repeatable for multiple files) |
+| `--jacoco <PATH>` | Path to JaCoCo XML coverage file (Java projects) |
+| `--coverage-py <PATH>` | Path to coverage.py JSON coverage file (Python projects) |
 
 **Output options**:
 | Option | Default | Description |
@@ -119,7 +124,8 @@ covguard check [OPTIONS]
 | `--scope <SCOPE>` | Line scope: `added` (default) or `touched` |
 | `--threshold <PCT>` | Minimum diff coverage percentage (0-100) |
 | `--no-ignore` | Disable `covguard: ignore` directives |
-| `--path-strip <PREFIX>` | Prefix to strip from LCOV SF paths (repeatable) |
+| `--path-strip <PREFIX>` | Prefix to strip from coverage file paths (repeatable) |
+| `--timing` | Enable performance timing diagnostics |
 
 **Truncation options**:
 | Option | Description |
@@ -253,7 +259,37 @@ path_strip = ["/home/runner/work/repo/repo/"]
 
 ## Integration Examples
 
-### GitHub Actions
+### Official GitHub Action
+
+Use the official covguard GitHub Action (recommended):
+
+```yaml
+name: Coverage Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: effortlessmetrics/covguard/actions/covguard@v1
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.sha }}
+          lcov-path: artifacts/coverage/lcov.info
+```
+
+See [`.github/actions/covguard/`](.github/actions/covguard/) for action documentation.
+
+### Manual GitHub Actions Setup
+
+For more control, run covguard directly:
 
 ```yaml
 name: Coverage Gate
@@ -295,6 +331,8 @@ jobs:
 ```
 
 ### GitLab CI
+
+Use the provided GitLab CI templates (see [`templates/gitlab/`](templates/gitlab/)):
 
 ```yaml
 coverage-gate:

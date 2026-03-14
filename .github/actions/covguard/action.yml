@@ -1,0 +1,363 @@
+name: 'covguard'
+description: 'Diff-scoped coverage gate for pull requests - ensures new/changed code is covered by tests'
+author: 'covguard'
+
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  coverage-file:
+    description: 'Path to the coverage report file (LCOV, JaCoCo XML, or coverage.py JSON)'
+    required: true
+  coverage-format:
+    description: 'Coverage format (lcov, jacoco, coverage-py). Auto-detected from file extension if not specified.'
+    required: false
+    default: ''
+  diff-base:
+    description: 'Base ref for diff comparison (e.g., origin/main, ${{ github.base_ref }})'
+    required: false
+    default: '${{ github.base_ref }}'
+  diff-head:
+    description: 'Head ref for diff comparison (e.g., ${{ github.sha }})'
+    required: false
+    default: '${{ github.sha }}'
+  diff-file:
+    description: 'Path to a pre-generated patch/diff file. If provided, diff-base and diff-head are ignored.'
+    required: false
+    default: ''
+  fail-threshold:
+    description: 'Minimum diff coverage percentage required to pass (0-100). Default 0 means any uncovered lines fail.'
+    required: false
+    default: '0'
+  fail-on-uncovered:
+    description: 'Fail the action if any changed lines are uncovered by tests'
+    required: false
+    default: 'true'
+  comment-pr:
+    description: 'Post a comment on the pull request with coverage results'
+    required: false
+    default: 'true'
+  comment-mode:
+    description: 'How to post PR comments (create, update, or delete-on-pass)'
+    required: false
+    default: 'update'
+  annotations:
+    description: 'Create GitHub annotations for uncovered lines (warning level)'
+    required: false
+    default: 'true'
+  sarif-output:
+    description: 'Generate SARIF output for GitHub Code Scanning'
+    required: false
+    default: 'false'
+  report-output:
+    description: 'Path to write the JSON report (relative to workspace)'
+    required: false
+    default: 'artifacts/covguard/report.json'
+  markdown-output:
+    description: 'Path to write the markdown comment (relative to workspace)'
+    required: false
+    default: 'artifacts/covguard/comment.md'
+  token:
+    description: 'GitHub token for PR comments (uses GITHUB_TOKEN by default)'
+    required: false
+    default: '${{ github.token }}'
+  version:
+    description: 'Version of covguard to install (e.g., v0.3.0, latest). Default: latest'
+    required: false
+    default: 'latest'
+  working-directory:
+    description: 'Working directory for running covguard commands'
+    required: false
+    default: '.'
+  skip-missing-coverage:
+    description: 'Skip files that have no coverage data (treat as pass instead of error)'
+    required: false
+    default: 'false'
+  config-file:
+    description: 'Path to covguard configuration file (covguard.toml)'
+    required: false
+    default: ''
+
+outputs:
+  passed:
+    description: 'Whether the coverage check passed (true/false)'
+    value: ${{ steps.covguard.outputs.passed }}
+  coverage-percent:
+    description: 'Diff coverage percentage (0-100)'
+    value: ${{ steps.covguard.outputs.coverage_percent }}
+  uncovered-lines:
+    description: 'Number of uncovered changed lines'
+    value: ${{ steps.covguard.outputs.uncovered_lines }}
+  covered-lines:
+    description: 'Number of covered changed lines'
+    value: ${{ steps.covguard.outputs.covered_lines }}
+  total-lines:
+    description: 'Total number of changed lines'
+    value: ${{ steps.covguard.outputs.total_lines }}
+  report-path:
+    description: 'Path to the generated JSON report'
+    value: ${{ steps.covguard.outputs.report_path }}
+  comment-path:
+    description: 'Path to the generated markdown comment'
+    value: ${{ steps.covguard.outputs.comment_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install covguard
+      shell: bash
+      env:
+        COVGUARD_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        
+        # Determine OS and architecture
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH="$(uname -m)"
+        
+        case "$ARCH" in
+          x86_64|amd64) ARCH="x86_64" ;;
+          aarch64|arm64) ARCH="aarch64" ;;
+          *)
+            echo "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+        esac
+        
+        # Determine version
+        if [ "$COVGUARD_VERSION" = "latest" ]; then
+          DOWNLOAD_VERSION=$(curl -sSLf "https://api.github.com/repos/covguard/covguard/releases/latest" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$DOWNLOAD_VERSION" ]; then
+            echo "Failed to determine latest version, using v0.3.0"
+            DOWNLOAD_VERSION="v0.3.0"
+          fi
+        else
+          DOWNLOAD_VERSION="$COVGUARD_VERSION"
+        fi
+        
+        # Download and install
+        BINARY_NAME="covguard-${OS}-${ARCH}"
+        if [ "$OS" = "windows" ]; then
+          BINARY_NAME="${BINARY_NAME}.exe"
+        fi
+        
+        DOWNLOAD_URL="https://github.com/covguard/covguard/releases/download/${DOWNLOAD_VERSION}/${BINARY_NAME}.tar.gz"
+        
+        echo "Installing covguard ${DOWNLOAD_VERSION} for ${OS}-${ARCH}..."
+        curl -sSLf "$DOWNLOAD_URL" | tar -xz -C /tmp
+        
+        # Move to PATH
+        sudo mv "/tmp/covguard" /usr/local/bin/covguard
+        sudo chmod +x /usr/local/bin/covguard
+        
+        # Verify installation
+        covguard --version
+        echo "covguard installed successfully!"
+
+    - name: Run covguard check
+      id: covguard
+      shell: bash
+      env:
+        INPUT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        INPUT_COVERAGE_FORMAT: ${{ inputs.coverage-format }}
+        INPUT_DIFF_BASE: ${{ inputs.diff-base }}
+        INPUT_DIFF_HEAD: ${{ inputs.diff-head }}
+        INPUT_DIFF_FILE: ${{ inputs.diff-file }}
+        INPUT_FAIL_THRESHOLD: ${{ inputs.fail-threshold }}
+        INPUT_FAIL_ON_UNCOVERED: ${{ inputs.fail-on-uncovered }}
+        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
+        INPUT_SARIF_OUTPUT: ${{ inputs.sarif-output }}
+        INPUT_REPORT_OUTPUT: ${{ inputs.report-output }}
+        INPUT_MARKDOWN_OUTPUT: ${{ inputs.markdown-output }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_SKIP_MISSING_COVERAGE: ${{ inputs.skip-missing-coverage }}
+        INPUT_CONFIG_FILE: ${{ inputs.config-file }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_REF: ${{ github.ref }}
+      run: |
+        set -euo pipefail
+        
+        cd "$INPUT_WORKING_DIRECTORY"
+        
+        # Build the covguard command
+        COVGUARD_ARGS=("check")
+        
+        # Coverage file
+        COVGUARD_ARGS+=("--lcov" "$INPUT_COVERAGE_FILE")
+        
+        # Coverage format (if specified)
+        if [ -n "$INPUT_COVERAGE_FORMAT" ]; then
+          COVGUARD_ARGS+=("--format" "$INPUT_COVERAGE_FORMAT")
+        fi
+        
+        # Diff options
+        if [ -n "$INPUT_DIFF_FILE" ]; then
+          COVGUARD_ARGS+=("--diff-file" "$INPUT_DIFF_FILE")
+        else
+          if [ -n "$INPUT_DIFF_BASE" ]; then
+            COVGUARD_ARGS+=("--base" "$INPUT_DIFF_BASE")
+          fi
+          if [ -n "$INPUT_DIFF_HEAD" ]; then
+            COVGUARD_ARGS+=("--head" "$INPUT_DIFF_HEAD")
+          fi
+        fi
+        
+        # Output paths
+        COVGUARD_ARGS+=("--out" "$INPUT_REPORT_OUTPUT")
+        COVGUARD_ARGS+=("--md" "$INPUT_MARKDOWN_OUTPUT")
+        
+        # Threshold
+        COVGUARD_ARGS+=("--fail-threshold" "$INPUT_FAIL_THRESHOLD")
+        
+        # Skip missing coverage
+        if [ "$INPUT_SKIP_MISSING_COVERAGE" = "true" ]; then
+          COVGUARD_ARGS+=("--skip-missing-coverage")
+        fi
+        
+        # Config file
+        if [ -n "$INPUT_CONFIG_FILE" ]; then
+          COVGUARD_ARGS+=("--config" "$INPUT_CONFIG_FILE")
+        fi
+        
+        # SARIF output
+        if [ "$INPUT_SARIF_OUTPUT" = "true" ]; then
+          COVGUARD_ARGS+=("--sarif" "artifacts/covguard/results.sarif")
+        fi
+        
+        # Run covguard
+        echo "Running: covguard ${COVGUARD_ARGS[*]}"
+        
+        # Capture exit code
+        set +e
+        OUTPUT=$(covguard "${COVGUARD_ARGS[@]}" 2>&1)
+        EXIT_CODE=$?
+        set -e
+        
+        echo "$OUTPUT"
+        
+        # Parse the report for outputs
+        if [ -f "$INPUT_REPORT_OUTPUT" ]; then
+          # Extract metrics from JSON report
+          PASSED=$(jq -r '.verdict.passed // false' "$INPUT_REPORT_OUTPUT")
+          COVERAGE_PERCENT=$(jq -r '.summary.diff_coverage_percent // 0' "$INPUT_REPORT_OUTPUT")
+          UNCOVERED_LINES=$(jq -r '.summary.uncovered_lines // 0' "$INPUT_REPORT_OUTPUT")
+          COVERED_LINES=$(jq -r '.summary.covered_lines // 0' "$INPUT_REPORT_OUTPUT")
+          TOTAL_LINES=$(jq -r '.summary.total_changed_lines // 0' "$INPUT_REPORT_OUTPUT")
+          
+          # Set GitHub outputs
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "coverage_percent=$COVERAGE_PERCENT" >> $GITHUB_OUTPUT
+          echo "uncovered_lines=$UNCOVERED_LINES" >> $GITHUB_OUTPUT
+          echo "covered_lines=$COVERED_LINES" >> $GITHUB_OUTPUT
+          echo "total_lines=$TOTAL_LINES" >> $GITHUB_OUTPUT
+          echo "report_path=$INPUT_REPORT_OUTPUT" >> $GITHUB_OUTPUT
+          echo "comment_path=$INPUT_MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
+          
+          # Create annotations for uncovered lines
+          if [ "$INPUT_ANNOTATIONS" = "true" ] && [ "$UNCOVERED_LINES" -gt 0 ]; then
+            echo ""
+            echo "::group::Uncovered Lines"
+            
+            # Parse findings and create annotations
+            jq -r '.findings[] | select(.check_id == "uncovered_line") | "::warning file=\(.location.path),line=\(.location.line)::\(.message)"' "$INPUT_REPORT_OUTPUT" 2>/dev/null || true
+            
+            echo "::endgroup::"
+          fi
+        else
+          echo "passed=false" >> $GITHUB_OUTPUT
+          echo "coverage_percent=0" >> $GITHUB_OUTPUT
+          echo "uncovered_lines=0" >> $GITHUB_OUTPUT
+          echo "covered_lines=0" >> $GITHUB_OUTPUT
+          echo "total_lines=0" >> $GITHUB_OUTPUT
+        fi
+        
+        # Store exit code for later steps
+        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+        
+        # Exit with appropriate code
+        if [ "$INPUT_FAIL_ON_UNCOVERED" = "true" ] && [ $EXIT_CODE -ne 0 ]; then
+          exit $EXIT_CODE
+        fi
+
+    - name: Post PR Comment
+      if: inputs.comment-pr == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        COMMENT_MODE: ${{ inputs.comment-mode }}
+        REPORT_PATH: ${{ inputs.report-output }}
+        MARKDOWN_PATH: ${{ inputs.markdown-output }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PASSED: ${{ steps.covguard.outputs.passed }}
+      run: |
+        set -euo pipefail
+        
+        # Skip if no markdown file
+        if [ ! -f "$MARKDOWN_PATH" ]; then
+          echo "No markdown output to post"
+          exit 0
+        fi
+        
+        # Handle delete-on-pass mode
+        if [ "$COMMENT_MODE" = "delete-on-pass" ] && [ "$PASSED" = "true" ]; then
+          echo "Coverage check passed, deleting any existing comment..."
+          
+          # Find and delete existing comment
+          EXISTING_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- covguard-comment -->")) | .id' | head -1 || true)
+          
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            gh api --method DELETE repos/$GITHUB_REPOSITORY/issues/comments/$EXISTING_COMMENT_ID
+            echo "Deleted existing comment"
+          fi
+          exit 0
+        fi
+        
+        # Read markdown content
+        COMMENT_BODY=$(cat "$MARKDOWN_PATH")
+        
+        # Add marker for identification
+        MARKER="<!-- covguard-comment pr=$PR_NUMBER -->"
+        
+        # Check for existing comment
+        EXISTING_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
+          --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- covguard-comment")) | .id' | head -1 || true)
+        
+        if [ "$COMMENT_MODE" = "update" ] && [ -n "$EXISTING_COMMENT_ID" ]; then
+          # Update existing comment
+          echo "Updating existing comment..."
+          gh api --method PATCH repos/$GITHUB_REPOSITORY/issues/comments/$EXISTING_COMMENT_ID \
+            -f body="${MARKER}
+        ${COMMENT_BODY}"
+        else
+          # Create new comment
+          echo "Creating new comment..."
+          gh api --method POST repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
+            -f body="${MARKER}
+        ${COMMENT_BODY}"
+        fi
+        
+        echo "PR comment posted successfully!"
+
+    - name: Upload SARIF to Code Scanning
+      if: inputs.sarif-output == 'true' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: artifacts/covguard/results.sarif
+        category: covguard-diff-coverage
+        wait-for-processing: true
+
+    - name: Upload Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: covguard-report
+        path: |
+          artifacts/covguard/
+        retention-days: 30

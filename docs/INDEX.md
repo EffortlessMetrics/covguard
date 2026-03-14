@@ -59,6 +59,7 @@ ADRs document significant architectural decisions:
 | [ADR-016](adr/ADR-016.md) | Output Truncation Strategy | Accepted |
 | [ADR-017](adr/ADR-017.md) | Error Code Registry | Accepted |
 | [ADR-018](adr/ADR-018.md) | Fuzzing Target Design | Accepted |
+| [ADR-019](adr/ADR-019.md) | Coverage Format Support | Accepted |
 
 See [adr/README.md](adr/README.md) for the full index and ADR guidelines.
 
@@ -84,6 +85,8 @@ Each crate has its own `CLAUDE.md` with crate-specific guidance:
 ## Other Resources
 
 - `contracts/schemas/` — JSON schemas for report validation
-- `fixtures/` — Test fixtures (diffs, LCOV files, expected outputs)
+- `fixtures/` — Test fixtures (diffs, LCOV, JaCoCo, coverage.py files, expected outputs)
 - `fuzz/` — Cargo-fuzz targets for parser safety
 - `xtask/` — Build automation tasks
+- `.github/actions/covguard/` — Official GitHub Action
+- `templates/gitlab/` — GitLab CI templates

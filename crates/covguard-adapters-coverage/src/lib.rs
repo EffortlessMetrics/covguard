@@ -1,13 +1,38 @@
-//! LCOV coverage file parser for covguard.
+//! Coverage file parsers for covguard.
 //!
-//! This crate provides parsing and merging of LCOV format coverage files,
+//! This crate provides parsing and merging of coverage files,
 //! producing a normalized coverage map that can be used by the domain layer.
+//!
+//! # Supported Formats
+//!
+//! - **LCOV** (default): Standard LCOV format used by gcov
+//! - **JaCoCo** (feature `jacoco`): JaCoCo XML format used by Java projects
+//! - **coverage.py** (feature `coverage-py`): coverage.py JSON format used by Python projects
 
 use std::collections::BTreeMap;
 
 use covguard_paths::{normalize_coverage_path, normalize_coverage_path_with_strip};
 use covguard_ports::CoverageProvider;
+use covguard_types::EnhancedError;
 use thiserror::Error;
+
+// JaCoCo parser module (optional)
+#[cfg(feature = "jacoco")]
+pub mod jacoco;
+
+// Re-export JaCoCo types when feature is enabled
+#[cfg(feature = "jacoco")]
+pub use jacoco::{is_jacoco_format, parse_jacoco, parse_jacoco_with_strip, JacocoError};
+
+// coverage.py parser module (optional)
+#[cfg(feature = "coverage-py")]
+pub mod coverage_py;
+
+// Re-export coverage.py types when feature is enabled
+#[cfg(feature = "coverage-py")]
+pub use coverage_py::{
+    is_coverage_py_format, parse_coverage_py, parse_coverage_py_with_strip, CoveragePyError,
+};
 
 // ============================================================================
 // Types
@@ -27,12 +52,176 @@ pub type CoverageMap = BTreeMap<String, BTreeMap<u32, u32>>;
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum LcovError {
     /// Invalid format in the LCOV file.
-    #[error("Invalid LCOV format: {0}")]
-    InvalidFormat(String),
+    #[error("{message}")]
+    InvalidFormat {
+        /// Detailed error message
+        message: String,
+        /// Line number where the error occurred (1-indexed)
+        line_number: Option<usize>,
+        /// Suggestion for fixing the error
+        suggestion: Option<String>,
+    },
+
+    /// Missing SF (source file) record.
+    #[error("Missing SF (source file) record at line {line_number}")]
+    MissingSourceFile {
+        /// Line number where the error occurred (1-indexed)
+        line_number: usize,
+    },
+
+    /// Invalid DA (data) record format.
+    #[error("Invalid DA record at line {line_number}: expected 'DA:<line>,<hits>', got '{actual}'")]
+    InvalidDaRecord {
+        /// Line number where the error occurred (1-indexed)
+        line_number: usize,
+        /// The actual content that was found
+        actual: String,
+    },
 
     /// I/O error while reading the file.
-    #[error("I/O error: {0}")]
-    IoError(String),
+    #[error("I/O error: {message}")]
+    IoError {
+        /// Error message
+        message: String,
+        /// Path to the file that couldn't be read
+        path: Option<String>,
+    },
+
+    /// Empty LCOV file.
+    #[error("LCOV file is empty or contains no valid records")]
+    EmptyFile,
+
+    /// Truncated LCOV file.
+    #[error("LCOV file appears truncated: {0}")]
+    TruncatedFile(String),
+}
+
+impl LcovError {
+    /// Creates an InvalidFormat error with a simple message (for backward compatibility).
+    pub fn invalid_format(message: impl Into<String>) -> Self {
+        Self::InvalidFormat {
+            message: message.into(),
+            line_number: None,
+            suggestion: None,
+        }
+    }
+
+    /// Creates an InvalidFormat error with line number context.
+    pub fn invalid_format_at_line(message: impl Into<String>, line_number: usize) -> Self {
+        Self::InvalidFormat {
+            message: message.into(),
+            line_number: Some(line_number),
+            suggestion: None,
+        }
+    }
+
+    /// Creates an IoError with file path context.
+    pub fn io_error_with_path(message: impl Into<String>, path: impl Into<String>) -> Self {
+        Self::IoError {
+            message: message.into(),
+            path: Some(path.into()),
+        }
+    }
+}
+
+impl covguard_types::EnhancedError for LcovError {
+    fn code(&self) -> &'static str {
+        covguard_types::CODE_INVALID_LCOV
+    }
+
+    fn description(&self) -> &str {
+        match self {
+            Self::InvalidFormat { .. } => "Failed to parse LCOV file",
+            Self::MissingSourceFile { .. } => "Missing source file record in LCOV",
+            Self::InvalidDaRecord { .. } => "Invalid data record in LCOV",
+            Self::IoError { .. } => "Failed to read LCOV file",
+            Self::EmptyFile => "LCOV file is empty",
+            Self::TruncatedFile(_) => "LCOV file is truncated",
+        }
+    }
+
+    fn remediation(&self) -> &str {
+        match self {
+            Self::InvalidFormat { suggestion, .. } => {
+                suggestion.as_deref().unwrap_or(
+                    "Verify the coverage generation step produced valid LCOV.\n\
+                     Ensure the LCOV file is not truncated or corrupted.\n\
+                     Try running: geninfo output.gcno -o coverage.info"
+                )
+            }
+            Self::MissingSourceFile { .. } => {
+                "LCOV files must start with SF: records. Ensure your coverage\n\
+                 report was generated correctly. Try running:\n\
+                   geninfo output.gcno -o coverage.info"
+            }
+            Self::InvalidDaRecord { .. } => {
+                "DA records must be in format 'DA:<line_number>,<hit_count>'.\n\
+                 Ensure the coverage tool generated the report correctly."
+            }
+            Self::IoError { path, .. } => {
+                if path.is_some() {
+                    "Check that the file path is correct and readable.\n\
+                     Ensure the file exists and has appropriate permissions."
+                } else {
+                    "Check file permissions and disk availability."
+                }
+            }
+            Self::EmptyFile => {
+                "The LCOV file contains no coverage data. Ensure:\n\
+                 1. Tests were executed before coverage collection\n\
+                 2. Coverage tool was configured to output LCOV format\n\
+                 3. Source files were compiled with coverage flags"
+            }
+            Self::TruncatedFile(_) => {
+                "The LCOV file appears incomplete. This can happen if:\n\
+                 1. Coverage generation was interrupted\n\
+                 2. File transfer was incomplete\n\
+                 3. Disk ran out of space during write\n\
+                 Regenerate the coverage report and try again."
+            }
+        }
+    }
+
+    fn help_uri(&self) -> &'static str {
+        "https://github.com/cov-guard/covguard/blob/main/docs/codes.md#invalid_lcov"
+    }
+
+    fn format_enhanced(&self) -> String {
+        let context = match self {
+            Self::InvalidFormat { line_number, .. } => {
+                if let Some(ln) = line_number {
+                    format!("at line {}", ln)
+                } else {
+                    String::new()
+                }
+            }
+            Self::MissingSourceFile { line_number } => format!("at line {}", line_number),
+            Self::InvalidDaRecord { line_number, .. } => format!("at line {}", line_number),
+            Self::IoError { path: Some(p), .. } => format!("file: {}", p),
+            _ => String::new(),
+        };
+
+        if context.is_empty() {
+            format!(
+                "Error [{}]: {}\n  {}\n\n  Hint: {}\n\n  See: {}\n",
+                self.code(),
+                self.description(),
+                self,
+                self.remediation(),
+                self.help_uri()
+            )
+        } else {
+            format!(
+                "Error [{}]: {}\n  {}\n  Context: {}\n\n  Hint: {}\n\n  See: {}\n",
+                self.code(),
+                self.description(),
+                self,
+                context,
+                self.remediation(),
+                self.help_uri()
+            )
+        }
+    }
 }
 
 /// Default LCOV coverage provider backed by this crate's parser and merger.
@@ -152,35 +341,29 @@ pub fn parse_lcov_with_strip(
         if let Some(data) = line.strip_prefix("DA:") {
             // Line coverage data
             if current_file.is_none() {
-                return Err(LcovError::InvalidFormat(format!(
-                    "DA record at line {} without preceding SF record",
-                    line_num + 1
-                )));
+                return Err(LcovError::MissingSourceFile { line_number: line_num + 1 });
             }
 
             let parts: Vec<&str> = data.split(',').collect();
             if parts.len() < 2 {
-                return Err(LcovError::InvalidFormat(format!(
-                    "Invalid DA format at line {}: expected 'DA:<line>,<hits>', got '{}'",
-                    line_num + 1,
-                    line
-                )));
+                return Err(LcovError::InvalidDaRecord {
+                    line_number: line_num + 1,
+                    actual: line.to_string(),
+                });
             }
 
             let line_number: u32 = parts[0].parse().map_err(|_| {
-                LcovError::InvalidFormat(format!(
-                    "Invalid line number at line {}: '{}'",
+                LcovError::invalid_format_at_line(
+                    format!("Invalid line number: '{}'", parts[0]),
                     line_num + 1,
-                    parts[0]
-                ))
+                )
             })?;
 
             let hits: u32 = parts[1].parse().map_err(|_| {
-                LcovError::InvalidFormat(format!(
-                    "Invalid hit count at line {}: '{}'",
+                LcovError::invalid_format_at_line(
+                    format!("Invalid hit count: '{}'", parts[1]),
                     line_num + 1,
-                    parts[1]
-                ))
+                )
             })?;
 
             current_lines.insert(line_number, hits);

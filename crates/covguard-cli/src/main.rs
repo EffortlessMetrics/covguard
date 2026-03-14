@@ -3,6 +3,7 @@
 //! This CLI tool checks whether changed lines in a pull request are covered by tests.
 
 use clap::{Parser, Subcommand, ValueEnum};
+use covguard_profiling::{profile_scope, ProfileStats, set_profiling_enabled};
 #[cfg(test)]
 use covguard_adapters_artifacts::write_raw_artifacts_to as write_raw_artifacts_to_artifacts;
 use covguard_adapters_artifacts::{
@@ -22,7 +23,7 @@ use covguard_output_features::OutputFeatureConfig;
 use covguard_types::CODE_UNCOVERED_LINE;
 #[cfg(test)]
 use covguard_types::SENSOR_SCHEMA_ID;
-use covguard_types::{REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Scope, explain};
+use covguard_types::{CODE_INVALID_DIFF, CODE_INVALID_LCOV, CODE_RUNTIME_ERROR, EnhancedError, REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_TOOL_ERROR, Scope, explain};
 use std::fs;
 #[cfg(not(test))]
 use std::io::IsTerminal;
@@ -169,6 +170,10 @@ enum Commands {
         /// Output path for full domain payload JSON (cockpit mode only)
         #[arg(long)]
         payload: Option<String>,
+
+        /// Enable performance profiling output
+        #[arg(long)]
+        timing: bool,
     },
     /// Explain an error code
     Explain {
@@ -220,6 +225,46 @@ enum CliError {
     App(#[from] AppError),
 }
 
+impl covguard_types::EnhancedError for CliError {
+    fn code(&self) -> &'static str {
+        match self {
+            CliError::MissingDiffSource | CliError::ConflictingDiffSource => CODE_INVALID_DIFF,
+            CliError::MissingLcov => CODE_INVALID_LCOV,
+            CliError::FileRead { .. }
+            | CliError::FileWrite { .. }
+            | CliError::DirCreate { .. }
+            | CliError::Serialize(_)
+            | CliError::ConfigLoad(_) => CODE_RUNTIME_ERROR,
+            CliError::App(app_error) => app_error.code(),
+        }
+    }
+
+    fn description(&self) -> &str {
+        match self {
+            CliError::MissingDiffSource | CliError::ConflictingDiffSource => "Invalid diff input",
+            CliError::MissingLcov => "Invalid LCOV input",
+            CliError::FileRead { .. } => "Tool runtime error",
+            CliError::FileWrite { .. } => "Tool runtime error",
+            CliError::DirCreate { .. } => "Tool runtime error",
+            CliError::Serialize(_) => "Tool runtime error",
+            CliError::ConfigLoad(_) => "Tool runtime error",
+            CliError::App(app_error) => app_error.description(),
+        }
+    }
+
+    fn remediation(&self) -> &str {
+        explain(self.code())
+            .map(|info| info.remediation)
+            .unwrap_or("No remediation available.")
+    }
+
+    fn help_uri(&self) -> &'static str {
+        explain(self.code())
+            .map(|info| info.help_uri)
+            .unwrap_or("https://github.com/EffortlessMetrics/covguard/blob/main/docs/codes.md")
+    }
+}
+
 /// Exit codes following the specification:
 /// - 0: Pass (or warn when not fail-configured)
 /// - 1: Tool/runtime error (I/O, parse failure)
@@ -267,7 +312,7 @@ fn run_cli_with_args(args: Vec<String>) -> i32 {
         Ok(cli) => match run(cli) {
             Ok(code) => code,
             Err(e) => {
-                eprintln!("error: {}", e);
+                eprintln!("{}", e.format_enhanced());
                 EXIT_CODE_ERROR
             }
         },
@@ -316,6 +361,7 @@ fn run(cli: Cli) -> Result<i32, CliError> {
             max_sarif_results,
             max_findings,
             payload,
+            timing,
         } => {
             let is_cockpit = matches!(mode, CliMode::Cockpit);
             let out_path = out.clone();
@@ -345,6 +391,7 @@ fn run(cli: Cli) -> Result<i32, CliError> {
                 output,
                 max_findings,
                 payload,
+                timing,
             ) {
                 Ok(code) => Ok(code),
                 Err(e) if is_cockpit => {
@@ -433,6 +480,7 @@ fn run_check_with_output(
     output: OutputFeatureConfig,
     max_findings: Option<usize>,
     payload: Option<String>,
+    timing: bool,
 ) -> Result<i32, CliError> {
     run_check_with_stdin_with_output(
         mode,
@@ -454,6 +502,7 @@ fn run_check_with_output(
         output,
         max_findings,
         payload,
+        timing,
         read_stdin_diff,
     )
 }
@@ -504,6 +553,7 @@ where
         OutputFeatureConfig::default(),
         max_findings,
         payload,
+        false, // timing disabled in test helper
         read_stdin,
     )
 }
@@ -529,22 +579,31 @@ fn run_check_with_stdin_with_output<F>(
     output: OutputFeatureConfig,
     max_findings: Option<usize>,
     payload: Option<String>,
+    timing: bool,
     read_stdin: F,
 ) -> Result<i32, CliError>
 where
     F: Fn(bool) -> Result<Option<String>, CliError>,
 {
+    // Enable profiling if requested
+    set_profiling_enabled(timing);
+    let profile_stats = ProfileStats::new();
+    let total_start = std::time::Instant::now();
+
     // In standard mode, LCOV is required
     let is_cockpit_mode = matches!(mode, CliMode::Cockpit);
     if !is_cockpit_mode && lcov.is_empty() {
         return Err(CliError::MissingLcov);
     }
+
     // Load configuration
+    let _config_guard = profile_scope!("config_load", &profile_stats);
     let loaded_config = if let Some(path) = &config_path {
         Some(load_config(Path::new(path)).map_err(|e| CliError::ConfigLoad(e.to_string()))?)
     } else {
         discover_config().map(|(_, c)| c)
     };
+    drop(_config_guard); // End config_load timing
 
     // Build CLI overrides
     let cli_overrides = CliOverrides {
@@ -585,6 +644,7 @@ where
     let repo_root = resolve_repo_root(root);
 
     // Determine diff source and read content
+    let _diff_load_guard = profile_scope!("diff_load", &profile_stats);
     let stdin_diff = if diff_file.as_deref() == Some("-") {
         read_stdin(true)?
     } else if diff_file.is_none() && base.is_none() && head.is_none() {
@@ -615,11 +675,16 @@ where
             (None, Some(base_ref), Some(head_ref)) => {
                 let content =
                     load_diff_from_git(base_ref, head_ref, &repo_root).map_err(|e| match e {
-                        DiffError::IoError(msg) => CliError::FileRead {
+                        DiffError::IoError { message, .. } => CliError::FileRead {
                             path: format!("git diff {}..{}", base_ref, head_ref),
-                            source: std::io::Error::other(msg),
+                            source: std::io::Error::other(message),
                         },
-                        DiffError::InvalidFormat(msg) => CliError::ConfigLoad(msg),
+                        DiffError::InvalidFormat { message, .. } => CliError::ConfigLoad(message),
+                        DiffError::GitError { message, .. } => CliError::ConfigLoad(message),
+                        DiffError::EmptyDiff => CliError::ConfigLoad("Empty diff".to_string()),
+                        DiffError::BinaryFile { path, .. } => CliError::ConfigLoad(format!("Binary file: {}", path)),
+                        DiffError::MissingHunkHeader { line_number, .. } => CliError::ConfigLoad(format!("Missing hunk header at line {}", line_number)),
+                        DiffError::InvalidHunkHeader { line_number, actual, .. } => CliError::ConfigLoad(format!("Invalid hunk header at line {}: '{}'", line_number, actual)),
                     })?;
                 (
                     content,
@@ -640,7 +705,10 @@ where
             }
         };
 
+    drop(_diff_load_guard); // End diff_load timing
+
     // Read LCOV contents
+    let _coverage_load_guard = profile_scope!("coverage_load", &profile_stats);
     let mut lcov_texts = Vec::with_capacity(lcov.len());
     for path in &lcov {
         let content = fs::read_to_string(path).map_err(|e| CliError::FileRead {
@@ -649,6 +717,7 @@ where
         })?;
         lcov_texts.push(content);
     }
+    drop(_coverage_load_guard); // End coverage_load timing
 
     // Optionally write raw inputs for debugging/provenance
     if raw {
@@ -683,8 +752,13 @@ where
     };
 
     // Run the check
+    let _check_guard = profile_scope!("policy_evaluation", &profile_stats);
     let reader = FsRepoReader::new(&repo_root);
     let result = check_with_clock_and_reader(request, &SystemClock, &reader)?;
+    drop(_check_guard); // End policy_evaluation timing
+
+    // Report generation timing
+    let _render_guard = profile_scope!("report_generation", &profile_stats);
 
     // Ensure output directory exists
     ensure_parent_dir(&out)?;
@@ -725,6 +799,15 @@ where
     // Print annotations to stdout
     if !result.annotations.is_empty() {
         print!("{}", result.annotations);
+    }
+    drop(_render_guard); // End report_generation timing
+
+    // Print profile report if timing was enabled
+    if timing {
+        let total_duration = total_start.elapsed();
+        eprintln!("\n=== Timing Report ===");
+        eprintln!("Total time: {:.2}ms", total_duration.as_secs_f64() * 1000.0);
+        profile_stats.print_report();
     }
 
     // Return the exit code based on mode
@@ -1517,6 +1600,7 @@ mod tests {
                 max_sarif_results: None,
                 max_findings: None,
                 payload: None,
+                timing: false,
             },
         };
 
@@ -1556,6 +1640,7 @@ mod tests {
                 max_sarif_results: None,
                 max_findings: None,
                 payload: None,
+                timing: false,
             },
         };
 

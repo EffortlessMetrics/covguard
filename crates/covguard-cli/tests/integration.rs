@@ -166,6 +166,84 @@ fn test_check_reads_diff_from_stdin() {
     assert_eq!(report["verdict"]["status"], "pass");
 }
 
+#[test]
+fn test_check_with_diff_file_dash_reads_from_stdin() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+    let diff = fs::read_to_string(fixture("fixtures/diff/simple_added.patch")).unwrap();
+
+    covguard()
+        .args([
+            "check",
+            "--diff-file",
+            "-",
+            "--lcov",
+            &fixture("fixtures/lcov/covered.info"),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .write_stdin(diff)
+        .assert()
+        .code(0);
+
+    let report: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(report["data"]["inputs"]["diff_source"], "stdin");
+    assert_eq!(report["verdict"]["status"], "pass");
+}
+
+#[test]
+fn test_check_with_diff_file_dash_uncovered_fails() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+    let diff = fs::read_to_string(fixture("fixtures/diff/simple_added.patch")).unwrap();
+
+    covguard()
+        .args([
+            "check",
+            "--diff-file",
+            "-",
+            "--lcov",
+            &fixture("fixtures/lcov/uncovered.info"),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .write_stdin(diff)
+        .assert()
+        .code(2);
+
+    let report: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(report["data"]["inputs"]["diff_source"], "stdin");
+    assert_eq!(report["verdict"]["status"], "fail");
+}
+
+#[test]
+fn test_check_with_diff_file_dash_empty_stdin() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+
+    covguard()
+        .args([
+            "check",
+            "--diff-file",
+            "-",
+            "--lcov",
+            &fixture("fixtures/lcov/covered.info"),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .write_stdin("")
+        .assert()
+        .code(0);
+
+    let report: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(report["data"]["inputs"]["diff_source"], "stdin");
+    // Empty diff should pass with no findings
+    assert_eq!(report["verdict"]["status"], "pass");
+}
+
 // ============================================================================
 // Advanced CLI Features
 // ============================================================================
@@ -1372,4 +1450,93 @@ fn test_cockpit_mode_receipt_truncated_payload_full() {
     assert_eq!(domain["schema"], "covguard.report.v1");
     assert!(domain["findings"].as_array().unwrap().len() > 1);
     assert!(domain["data"]["truncation"].is_null());
+}
+
+// ============================================================================
+// Enhanced Error Formatting Tests
+// ============================================================================
+
+#[test]
+fn test_error_missing_lcov_shows_enhanced_format() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+
+    covguard()
+        .args([
+            "check",
+            "--diff-file",
+            &fixture("fixtures/diff/simple_added.patch"),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("Error [covguard.input.invalid_lcov]"))
+        .stderr(predicate::str::contains("Hint:"))
+        .stderr(predicate::str::contains("See:"));
+}
+
+#[test]
+fn test_error_missing_diff_shows_enhanced_format() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+
+    covguard()
+        .args([
+            "check",
+            "--lcov",
+            &fixture("fixtures/lcov/covered.info"),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("Error [covguard.input.invalid_diff]"))
+        .stderr(predicate::str::contains("Hint:"))
+        .stderr(predicate::str::contains("See:"));
+}
+
+// Note: Invalid LCOV/diff parse errors are written to the report file, not stderr.
+// See test_check_writes_error_report_on_invalid_lcov and test_check_writes_error_report_on_invalid_diff.
+
+#[test]
+fn test_error_file_not_found_shows_enhanced_format() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+
+    covguard()
+        .args([
+            "check",
+            "--diff-file",
+            &fixture("fixtures/diff/simple_added.patch"),
+            "--lcov",
+            "Z:\\nonexistent_drive_9999\\coverage.info",
+            "--out",
+            &out.display().to_string(),
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("Error [tool.runtime_error]"))
+        .stderr(predicate::str::contains("Hint:"))
+        .stderr(predicate::str::contains("See:"));
+}
+
+#[test]
+fn test_error_includes_documentation_link() {
+    let temp = TempDir::new().unwrap();
+    let out = temp.path().join("report.json");
+
+    covguard()
+        .args([
+            "check",
+            "--diff-file",
+            &fixture("fixtures/diff/simple_added.patch"),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "https://github.com/EffortlessMetrics/covguard/blob/main/docs/codes.md",
+        ));
 }

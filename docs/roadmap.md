@@ -53,25 +53,26 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 
 ## Future Milestones
 
-### v0.2.0 - Enhanced Ergonomics
+### v0.2.0 - Enhanced Ergonomics ✅ Complete
 
 **Focus:** Developer experience and feedback quality
 
-- Improved error messages with remediation hints
-- Additional coverage format support (investigation)
-- Performance optimizations for large repos
-- Expanded documentation and examples
-- Example repository with multiple CI configurations
+- ✅ Improved error messages with remediation hints
+- ✅ JaCoCo XML coverage format support (Java ecosystem)
+- ✅ coverage.py JSON format support (Python ecosystem)
+- ✅ Stdin diff input support (`--diff-file -`)
+- ✅ Performance profiling with `--timing` flag
+- ✅ Criterion benchmarks for performance tracking
+- ✅ Expanded documentation and examples
 
-### v0.3.0 - Extended Integration
+### v0.3.0 - Extended Integration ✅ Complete
 
 **Focus:** CI/CD ecosystem integration
 
-- Official GitHub Action
-- GitLab CI templates
-- Additional output formats as needed
-- Community feedback integration
-- Performance profiling and optimization
+- ✅ Official GitHub Action (`.github/actions/covguard/`)
+- ✅ GitLab CI templates (`templates/gitlab/`)
+- ✅ Community feedback integration
+- ✅ Performance profiling and optimization
 
 ### v1.0.0 - Stable API
 
@@ -90,8 +91,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 | Format | Status | Notes |
 |--------|--------|-------|
 | LCOV | ✅ v0.1.0 | Primary format |
-| Jacoco | 🔍 Investigating | Java ecosystem |
-| coverage.py | 🔍 Investigating | Python ecosystem |
+| JaCoCo XML | ✅ v0.2.0 | Java ecosystem |
+| coverage.py JSON | ✅ v0.2.0 | Python ecosystem |
 
 ### Diff Sources
 
@@ -99,7 +100,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 |--------|--------|-------|
 | Unified diff patches | ✅ v0.1.0 | `--diff-file` |
 | Git refs | ✅ v0.1.0 | `--base` / `--head` |
-| Stdin | 🔍 Planned | Pipe support |
+| Stdin | ✅ v0.2.0 | `--diff-file -` for pipe support |
 
 ### Output Formats
 
@@ -136,16 +137,22 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 | Ignore directives | ✅ Complete | 0.1.0 | Line/block level |
 | Built-in profiles | ✅ Complete | 0.1.0 | 5 profiles |
 
-### Planned Features
+### v0.2.0–0.3.0 Features
+
+| Feature | Status | Version | Notes |
+|---------|--------|---------|-------|
+| Stdin diff input | ✅ Complete | 0.2.0 | `--diff-file -` pipe support |
+| Enhanced error messages | ✅ Complete | 0.2.0 | Remediation hints |
+| Performance profiling | ✅ Complete | 0.2.0 | `--timing` flag, criterion benchmarks |
+| JaCoCo XML parser | ✅ Complete | 0.2.0 | Java ecosystem |
+| coverage.py JSON parser | ✅ Complete | 0.2.0 | Python ecosystem |
+| GitHub Action | ✅ Complete | 0.3.0 | `.github/actions/covguard/` |
+| GitLab CI templates | ✅ Complete | 0.3.0 | `templates/gitlab/` |
+
+### Future Features
 
 | Feature | Status | Target | Notes |
 |---------|--------|--------|-------|
-| Stdin diff input | 📋 Planned | 0.2.0 | Pipe support |
-| Enhanced error messages | 🔄 In Progress | 0.2.0 | Remediation hints |
-| Performance profiling | 📋 Planned | 0.2.0 | Large repo optimization |
-| GitHub Action | 📋 Planned | 0.3.0 | Official action |
-| GitLab CI templates | 📋 Planned | 0.3.0 | Integration examples |
-| Alternative coverage formats | 🔍 Investigating | TBD | Jacoco, coverage.py |
 | Global coverage tracking | 💭 Exploring | TBD | Opt-in feature |
 | IDE integration | 💭 Exploring | TBD | VS Code, IntelliJ |
 
@@ -176,19 +183,19 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 ### Integration Ecosystem
 | Platform | Status | Integration Type |
 |----------|--------|-----------------|
-| GitHub Actions | 📋 Planned | Official action |
-| GitLab CI | 📋 Planned | Template examples |
+| GitHub Actions | ✅ v0.3.0 | Official action (`.github/actions/covguard/`) |
+| GitLab CI | ✅ v0.3.0 | Template examples (`templates/gitlab/`) |
 | Bitbucket | 💭 Exploring | Community demand |
 | Azure DevOps | 💭 Exploring | Community demand |
 
 ### Language Coverage Tooling
-| Language | Coverage Tool | LCOV Support |
-|----------|--------------|--------------|
-| Rust | cargo-llvm-cov | ✅ Native |
-| C/C++ | gcov | ✅ Native |
-| Python | coverage.py | ✅ Via lcov output |
-| Java | Jacoco | 🔍 Investigating |
-| JavaScript | c8/istanbul | ✅ Via lcov output |
+| Language | Coverage Tool | LCOV Support | Native Format |
+|----------|--------------|--------------|---------------|
+| Rust | cargo-llvm-cov | ✅ Native | — |
+| C/C++ | gcov | ✅ Native | — |
+| Python | coverage.py | ✅ Via lcov output | ✅ JSON (v0.2.0) |
+| Java | JaCoCo | ✅ Via lcov output | ✅ XML (v0.2.0) |
+| JavaScript | c8/istanbul | ✅ Via lcov output | — |
 
 ## Related Documentation
 

@@ -1,0 +1,308 @@
+# covguard GitLab CI Template for Python
+# =======================================
+# This template provides a complete setup for running covguard
+# with Python projects using coverage.py for coverage generation.
+#
+# Usage:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/your-org/covguard/main/templates/gitlab/covguard-python.yml'
+#
+#   covguard:python:
+#     extends: .covguard_python
+
+# Configuration Variables
+# -----------------------
+# PYTHON_VERSION        - Python version to use (default: "3.11")
+# COVGUARD_VERSION      - Version of covguard to use (default: latest)
+# FAIL_THRESHOLD        - Minimum coverage % to pass (default: 0)
+# WARN_THRESHOLD        - Minimum coverage % to warn (default: 0)
+# POST_MR_COMMENT       - Post MR comment with results (default: "true")
+# FAIL_ON_UNCOVERED     - Fail if uncovered lines found (default: "true")
+# COVERAGE_SOURCE       - Source directories to measure (default: ".")
+# PYTEST_ARGS           - Extra arguments for pytest (default: "")
+# REQUIREMENTS_FILE     - Path to requirements.txt (default: requirements.txt)
+
+variables:
+  PYTHON_VERSION: "3.11"
+  COVGUARD_VERSION: "latest"
+  FAIL_THRESHOLD: "0"
+  WARN_THRESHOLD: "0"
+  POST_MR_COMMENT: "true"
+  FAIL_ON_UNCOVERED: "true"
+  COVERAGE_SOURCE: "."
+  PYTEST_ARGS: ""
+  REQUIREMENTS_FILE: "requirements.txt"
+
+# Python coverage job using coverage.py
+# -------------------------------------
+.covguard_python:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: 0
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PIP_NO_WARN_SCRIPT_LOCATION: "1"
+  before_script:
+    - |
+      # Install dependencies
+      if [ -f "${REQUIREMENTS_FILE}" ]; then
+        pip install -r ${REQUIREMENTS_FILE}
+      fi
+      
+      # Install coverage and pytest
+      pip install coverage pytest pytest-cov
+      
+      # Install covguard (using pip or download binary)
+      if [ "${COVGUARD_VERSION}" = "latest" ]; then
+        pip install covguard 2>/dev/null || {
+          # Fallback to binary download if pip package not available
+          curl -sSL https://github.com/covguard/covguard/releases/latest/download/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+        }
+      else
+        pip install covguard==${COVGUARD_VERSION} 2>/dev/null || {
+          curl -sSL https://github.com/covguard/covguard/releases/download/v${COVGUARD_VERSION}/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+        }
+      fi
+      
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+      
+      echo "covguard Python configuration:"
+      echo "  Python version: ${PYTHON_VERSION}"
+      echo "  Base ref: ${BASE_REF}"
+      echo "  Head ref: ${HEAD_REF}"
+      echo "  Coverage source: ${COVERAGE_SOURCE}"
+      echo "  Fail threshold: ${FAIL_THRESHOLD}%"
+      echo "  Warn threshold: ${WARN_THRESHOLD}%"
+  script:
+    - |
+      # Generate coverage report using coverage.py
+      echo "Generating coverage report..."
+      
+      # Run tests with coverage
+      coverage run --source=${COVERAGE_SOURCE} -m pytest ${PYTEST_ARGS}
+      
+      # Export to LCOV format
+      coverage lcov -o lcov.info
+      
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+      
+      # Add optional arguments
+      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
+      fi
+      
+      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
+      fi
+      
+      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
+      fi
+      
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+      
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS
+  after_script:
+    - |
+      # Post MR comment if enabled and we're in an MR
+      if [ "${POST_MR_COMMENT}" = "true" ] && [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f "${CI_PROJECT_DIR}/covguard-comment.md" ]; then
+        echo "Posting merge request comment..."
+        
+        # Install jq if not available
+        which jq || apt-get update && apt-get install -y jq
+        
+        COMMENT_BODY=$(cat "${CI_PROJECT_DIR}/covguard-comment.md" | jq -Rs .)
+        
+        curl -s -X POST \
+          -H "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+          -H "Content-Type: application/json" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+          -d "{\"body\": ${COMMENT_BODY}}" || echo "Warning: Failed to post MR comment"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - covguard-report.json
+      - covguard-comment.md
+      - lcov.info
+      - .coverage
+      - htmlcov/
+    reports:
+      codequality: covguard-report.json
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 1 week
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+
+# Python MR coverage check
+# ------------------------
+covguard:python:mr:
+  extends: .covguard_python
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Python branch coverage check
+# ----------------------------
+covguard:python:branch:
+  extends: .covguard_python
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
+    HEAD_REF: "${CI_COMMIT_SHA}"
+
+# Python coverage with poetry (alternative)
+# -----------------------------------------
+# Use this if you use poetry for dependency management
+.covguard_python_poetry:
+  extends: .covguard_python
+  before_script:
+    - |
+      # Install poetry
+      pip install poetry
+      
+      # Install dependencies
+      poetry install --with dev
+      
+      # Install coverage
+      pip install coverage pytest pytest-cov
+      
+      # Install covguard
+      if [ "${COVGUARD_VERSION}" = "latest" ]; then
+        pip install covguard 2>/dev/null || {
+          curl -sSL https://github.com/covguard/covguard/releases/latest/download/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+        }
+      else
+        pip install covguard==${COVGUARD_VERSION} 2>/dev/null || {
+          curl -sSL https://github.com/covguard/covguard/releases/download/v${COVGUARD_VERSION}/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+        }
+      fi
+      
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+  script:
+    - |
+      # Generate coverage report using coverage.py with poetry
+      echo "Generating coverage report..."
+      
+      # Run tests with coverage
+      poetry run coverage run --source=${COVERAGE_SOURCE} -m pytest ${PYTEST_ARGS}
+      
+      # Export to LCOV format
+      poetry run coverage lcov -o lcov.info
+      
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+      
+      # Add optional arguments
+      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
+      fi
+      
+      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
+      fi
+      
+      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
+      fi
+      
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+      
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS
+
+# Python coverage with tox (alternative)
+# --------------------------------------
+# Use this if you use tox for testing
+.covguard_python_tox:
+  extends: .covguard_python
+  variables:
+    TOX_ENV: "py311"
+  before_script:
+    - |
+      # Install tox
+      pip install tox
+      
+      # Install covguard
+      if [ "${COVGUARD_VERSION}" = "latest" ]; then
+        pip install covguard 2>/dev/null || {
+          curl -sSL https://github.com/covguard/covguard/releases/latest/download/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+        }
+      else
+        pip install covguard==${COVGUARD_VERSION} 2>/dev/null || {
+          curl -sSL https://github.com/covguard/covguard/releases/download/v${COVGUARD_VERSION}/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+        }
+      fi
+      
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+  script:
+    - |
+      # Run tox with coverage
+      tox -e ${TOX_ENV}
+      
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+      
+      # Add optional arguments
+      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
+      fi
+      
+      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
+      fi
+      
+      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
+      fi
+      
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+      
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS

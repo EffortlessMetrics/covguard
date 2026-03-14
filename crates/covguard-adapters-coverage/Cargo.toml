@@ -12,10 +12,22 @@ categories = ["parser-implementations", "development-tools::testing"]
 readme = "README.md"
 rust-version.workspace = true
 
+[features]
+default = ["lcov"]
+lcov = []
+jacoco = ["quick-xml"]
+coverage-py = ["serde", "serde_json"]
+
 [dependencies]
 thiserror.workspace = true
 covguard-ports = { path = "../covguard-ports", version = "0.1.0" }
 covguard-paths.workspace = true
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+
+# Optional dependencies
+quick-xml = { version = "0.37", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]
 proptest = "1.10.0"

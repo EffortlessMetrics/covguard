@@ -17,6 +17,7 @@ thiserror.workspace = true
 covguard-ports = { path = "../covguard-ports", version = "0.1.0" }
 covguard-paths.workspace = true
 covguard-ranges.workspace = true
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
 
 [dev-dependencies]
 proptest = "1.10.0"
