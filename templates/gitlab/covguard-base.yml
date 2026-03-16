@@ -1,0 +1,139 @@
+# covguard GitLab CI Base Template
+# =================================
+# This template provides the base job definition for running covguard
+# diff-scoped coverage checks in GitLab CI/CD pipelines.
+#
+# Usage:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
+#
+#   variables:
+#     COVERAGE_FILE: "coverage/lcov.info"
+#     THRESHOLD: "80"
+#
+#   covguard:
+#     extends: .covguard_base
+
+# Configuration Variables
+# -----------------------
+# COVERAGE_FILE         - Path to the LCOV coverage report file (required)
+# THRESHOLD             - Minimum coverage % to pass (optional)
+# SCOPE                 - Line scope: added or touched (default: added)
+# PROFILE               - Config profile: oss, moderate, team, strict, lenient
+# POST_MR_COMMENT       - Post MR comment with results (default: "true")
+# BASE_REF              - Base ref for diff (default: $CI_MERGE_REQUEST_DIFF_BASE_SHA)
+# HEAD_REF              - Head ref for diff (default: $CI_COMMIT_SHA)
+
+variables:
+  THRESHOLD: ""
+  SCOPE: ""
+  PROFILE: ""
+  POST_MR_COMMENT: "true"
+
+# Base job definition
+# -------------------
+.covguard_base:
+  stage: test
+  image: rust:latest
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: 0
+  before_script:
+    - |
+      # Validate required variables
+      if [ -z "$COVERAGE_FILE" ]; then
+        echo "Error: COVERAGE_FILE variable is required"
+        exit 1
+      fi
+
+      # Install covguard
+      cargo install covguard-cli --locked
+
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+
+      echo "covguard configuration:"
+      echo "  Coverage file: ${COVERAGE_FILE}"
+      echo "  Base ref: ${BASE_REF}"
+      echo "  Head ref: ${HEAD_REF}"
+  script:
+    - |
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov ${COVERAGE_FILE}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+
+      # Add optional arguments (only flags the CLI actually supports)
+      if [ -n "$THRESHOLD" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
+      fi
+
+      if [ -n "$SCOPE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
+      fi
+
+      if [ -n "$PROFILE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
+      fi
+
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS
+  after_script:
+    - |
+      # Post MR comment if enabled and we're in an MR
+      if [ "${POST_MR_COMMENT}" = "true" ] && [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f "${CI_PROJECT_DIR}/covguard-comment.md" ]; then
+        echo "Posting merge request comment..."
+
+        COMMENT_BODY=$(cat "${CI_PROJECT_DIR}/covguard-comment.md" | jq -Rs .)
+
+        curl -s -X POST \
+          -H "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+          -H "Content-Type: application/json" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+          -d "{\"body\": ${COMMENT_BODY}}" || echo "Warning: Failed to post MR comment"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - covguard-report.json
+      - covguard-comment.md
+    expire_in: 1 week
+
+# Job for MR coverage check (extends base)
+# ----------------------------------------
+covguard:mr:
+  extends: .covguard_base
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Job for branch coverage check (extends base)
+# --------------------------------------------
+covguard:branch:
+  extends: .covguard_base
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
+    HEAD_REF: "${CI_COMMIT_SHA}"
+
+# Hidden template for custom configuration
+# ----------------------------------------
+# Use this when you need full control over the job
+.covguard_template:
+  extends: .covguard_base
+  allow_failure: true

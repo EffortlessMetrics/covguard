@@ -20,6 +20,7 @@ path = "src/main.rs"
 covguard-types = { path = "../covguard-types", version = "0.1.0" }
 covguard-app = { path = "../covguard-app", version = "0.1.0" }
 covguard-config = { path = "../covguard-config", version = "0.1.0" }
+covguard-profiling = { path = "../covguard-profiling", version = "0.1.0" }
 covguard-output-features.workspace = true
 covguard-adapters-artifacts.workspace = true
 covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.1.0" }

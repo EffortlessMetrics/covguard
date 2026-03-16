@@ -221,6 +221,36 @@ impl From<LcovError> for AppError {
     }
 }
 
+impl covguard_types::EnhancedError for AppError {
+    fn code(&self) -> &'static str {
+        match self {
+            AppError::DiffParse(_) => covguard_types::CODE_INVALID_DIFF,
+            AppError::LcovParse(_) => covguard_types::CODE_INVALID_LCOV,
+            AppError::Io(_) => covguard_types::CODE_RUNTIME_ERROR,
+        }
+    }
+
+    fn description(&self) -> &str {
+        match self {
+            AppError::DiffParse(_) => "Invalid diff input",
+            AppError::LcovParse(_) => "Invalid LCOV input",
+            AppError::Io(_) => "Tool runtime error",
+        }
+    }
+
+    fn remediation(&self) -> &str {
+        covguard_types::explain(self.code())
+            .map(|info| info.remediation)
+            .unwrap_or("No remediation available.")
+    }
+
+    fn help_uri(&self) -> &'static str {
+        covguard_types::explain(self.code())
+            .map(|info| info.help_uri)
+            .unwrap_or("https://github.com/EffortlessMetrics/covguard/blob/main/docs/codes.md")
+    }
+}
+
 // ============================================================================
 // Main Check Function
 // ============================================================================
@@ -1998,7 +2028,7 @@ end_of_record
     fn test_app_error_from_diff_error() {
         use covguard_adapters_diff::DiffError;
 
-        let err = DiffError::InvalidFormat("bad diff".to_string());
+        let err = DiffError::invalid_format("bad diff");
         let app: AppError = err.into();
         assert!(matches!(
             app,
@@ -2010,7 +2040,7 @@ end_of_record
     fn test_app_error_from_lcov_error() {
         use covguard_adapters_coverage::LcovError;
 
-        let err = LcovError::InvalidFormat("bad lcov".to_string());
+        let err = LcovError::invalid_format("bad lcov");
         let app: AppError = err.into();
         assert!(matches!(
             app,

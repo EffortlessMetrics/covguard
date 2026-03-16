@@ -1,0 +1,20 @@
+[package]
+name = "covguard-profiling"
+description = "Performance profiling utilities for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+rust-version.workspace = true
+
+[features]
+default = []
+profiling = []
+
+[dependencies]
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true

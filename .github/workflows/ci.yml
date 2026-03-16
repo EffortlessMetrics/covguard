@@ -154,7 +154,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install ajv-cli
         run: npm install -g ajv-cli ajv-formats
@@ -173,8 +173,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Rust 1.85 (edition 2024 MSRV)
-        uses: dtolnay/rust-toolchain@1.100
+      - name: Install Rust 1.92 (MSRV from Cargo.toml)
+        uses: dtolnay/rust-toolchain@1.92
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -237,7 +237,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust nightly toolchain
         uses: dtolnay/rust-toolchain@nightly

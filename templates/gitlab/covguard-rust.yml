@@ -1,0 +1,200 @@
+# covguard GitLab CI Template for Rust
+# =====================================
+# This template provides a complete setup for running covguard
+# with Rust projects using cargo-llvm-cov for coverage generation.
+#
+# Usage:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-rust.yml'
+#
+#   covguard:rust:
+#     extends: .covguard_rust
+
+# Configuration Variables
+# -----------------------
+# RUST_TOOLCHAIN       - Rust toolchain to use (default: stable)
+# CARGO_LLVM_COV_VERSION - Version of cargo-llvm-cov (default: latest)
+# THRESHOLD            - Minimum coverage % to pass (optional)
+# SCOPE                - Line scope: added or touched (default: added)
+# PROFILE              - Config profile: oss, moderate, team, strict, lenient
+# POST_MR_COMMENT      - Post MR comment with results (default: "true")
+# EXTRA_TEST_ARGS      - Extra arguments for cargo test (default: "")
+
+variables:
+  RUST_TOOLCHAIN: "stable"
+  CARGO_LLVM_COV_VERSION: "latest"
+  THRESHOLD: ""
+  SCOPE: ""
+  PROFILE: ""
+  POST_MR_COMMENT: "true"
+  EXTRA_TEST_ARGS: ""
+
+# Rust coverage job using cargo-llvm-cov
+# ---------------------------------------
+.covguard_rust:
+  stage: test
+  image: rust:${RUST_TOOLCHAIN}
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: 0
+    RUST_BACKTRACE: "1"
+    CARGO_TERM_COLOR: "always"
+  before_script:
+    - |
+      # Install cargo-llvm-cov
+      if [ "${CARGO_LLVM_COV_VERSION}" = "latest" ]; then
+        cargo install cargo-llvm-cov
+      else
+        cargo install cargo-llvm-cov --version ${CARGO_LLVM_COV_VERSION}
+      fi
+
+      # Install covguard
+      cargo install covguard-cli --locked
+
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+
+      echo "covguard Rust configuration:"
+      echo "  Rust toolchain: ${RUST_TOOLCHAIN}"
+      echo "  Base ref: ${BASE_REF}"
+      echo "  Head ref: ${HEAD_REF}"
+  script:
+    - |
+      # Generate coverage report using cargo-llvm-cov
+      echo "Generating coverage report..."
+      cargo llvm-cov --lcov --output-path lcov.info ${EXTRA_TEST_ARGS}
+
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+
+      # Add optional arguments
+      if [ -n "$THRESHOLD" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
+      fi
+
+      if [ -n "$SCOPE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
+      fi
+
+      if [ -n "$PROFILE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
+      fi
+
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS
+  after_script:
+    - |
+      # Post MR comment if enabled and we're in an MR
+      if [ "${POST_MR_COMMENT}" = "true" ] && [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f "${CI_PROJECT_DIR}/covguard-comment.md" ]; then
+        echo "Posting merge request comment..."
+
+        COMMENT_BODY=$(cat "${CI_PROJECT_DIR}/covguard-comment.md" | jq -Rs .)
+
+        curl -s -X POST \
+          -H "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+          -H "Content-Type: application/json" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+          -d "{\"body\": ${COMMENT_BODY}}" || echo "Warning: Failed to post MR comment"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - covguard-report.json
+      - covguard-comment.md
+      - lcov.info
+    expire_in: 1 week
+
+# Rust MR coverage check
+# ----------------------
+covguard:rust:mr:
+  extends: .covguard_rust
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Rust branch coverage check
+# --------------------------
+covguard:rust:branch:
+  extends: .covguard_rust
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
+    HEAD_REF: "${CI_COMMIT_SHA}"
+
+# Rust coverage with nextest (alternative)
+# ----------------------------------------
+# Use this if you prefer nextest for running tests
+.covguard_rust_nextest:
+  extends: .covguard_rust
+  before_script:
+    - |
+      # Install cargo-llvm-cov
+      if [ "${CARGO_LLVM_COV_VERSION}" = "latest" ]; then
+        cargo install cargo-llvm-cov
+      else
+        cargo install cargo-llvm-cov --version ${CARGO_LLVM_COV_VERSION}
+      fi
+
+      # Install cargo-nextest
+      cargo install cargo-nextest
+
+      # Install covguard
+      cargo install covguard-cli --locked
+
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+  script:
+    - |
+      # Generate coverage report using cargo-llvm-cov with nextest
+      echo "Generating coverage report with nextest..."
+      cargo llvm-cov nextest --lcov --output-path lcov.info ${EXTRA_TEST_ARGS}
+
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+
+      # Add optional arguments
+      if [ -n "$THRESHOLD" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
+      fi
+
+      if [ -n "$SCOPE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
+      fi
+
+      if [ -n "$PROFILE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
+      fi
+
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS

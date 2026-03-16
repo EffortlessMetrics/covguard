@@ -457,7 +457,7 @@ fn build_sarif_report(report: &Report, max_results: usize) -> SarifReport {
                 driver: SarifDriver {
                     name: "covguard".to_string(),
                     version: report.tool.version.clone(),
-                    information_uri: "https://github.com/covguard/covguard".to_string(),
+                    information_uri: "https://github.com/EffortlessMetrics/covguard".to_string(),
                     rules,
                 },
             },

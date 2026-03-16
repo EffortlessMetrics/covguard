@@ -1,0 +1,201 @@
+# Example workflow: Diff Coverage Check with covguard
+#
+# This workflow demonstrates how to use the covguard GitHub Action
+# to enforce diff-scoped coverage on pull requests.
+#
+# The workflow:
+# 1. Runs tests and generates coverage
+# 2. Uses covguard to check diff coverage
+# 3. Posts results as a PR comment
+# 4. Fails if new/changed code is not covered
+
+name: Diff Coverage
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+# Ensure only one workflow runs per PR at a time
+concurrency:
+  group: diff-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # First, run tests and generate coverage
+  coverage:
+    name: Generate Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history for accurate diffs
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate coverage
+        run: |
+          cargo llvm-cov --lcov --output-path lcov.info
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: lcov.info
+          retention-days: 1
+
+  # Run covguard diff coverage check
+  diff-coverage:
+    name: Check Diff Coverage
+    runs-on: ubuntu-latest
+    needs: coverage
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Required for git diff
+
+      - name: Download coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      # Basic usage: Fail on any uncovered lines
+      - name: Check diff coverage
+        id: covguard
+        uses: ./.github/actions/covguard
+        with:
+          lcov-file: lcov.info
+          comment-pr: true
+
+      # Use outputs in subsequent steps
+      - name: Coverage summary
+        run: |
+          echo "Coverage check passed: ${{ steps.covguard.outputs.passed }}"
+          echo "Diff coverage: ${{ steps.covguard.outputs.coverage-percent }}%"
+          echo "Uncovered lines: ${{ steps.covguard.outputs.uncovered-lines }}"
+          echo "Report: ${{ steps.covguard.outputs.report-path }}"
+
+  # Example: With minimum threshold
+  diff-coverage-threshold:
+    name: Check Diff Coverage (80% threshold)
+    runs-on: ubuntu-latest
+    needs: coverage
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: Check diff coverage with threshold
+        uses: ./.github/actions/covguard
+        with:
+          lcov-file: lcov.info
+          threshold: 80
+          comment-pr: true
+          comment-mode: update
+
+  # Example: With SARIF output for Code Scanning
+  diff-coverage-sarif:
+    name: Check Diff Coverage (SARIF)
+    runs-on: ubuntu-latest
+    needs: coverage
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: Check diff coverage with SARIF
+        uses: ./.github/actions/covguard
+        with:
+          lcov-file: lcov.info
+          sarif-output: true
+          threshold: 0  # Non-blocking for SARIF upload
+
+---
+
+# Example: Using with a specific covguard version
+
+name: Diff Coverage (Pinned Version)
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  diff-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate coverage
+        run: |
+          # Your coverage generation command here
+          echo "Generate coverage..."
+
+      - name: Check diff coverage
+        uses: ./.github/actions/covguard
+        with:
+          lcov-file: lcov.info
+          threshold: 100
+          comment-pr: true
+          comment-mode: delete-on-pass  # Clean up comments on success
+
+---
+
+# Example: Using with configuration file
+
+name: Diff Coverage (With Config)
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  diff-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate coverage
+        run: |
+          # Your coverage generation command here
+          echo "Generate coverage..."
+
+      - name: Check diff coverage
+        uses: ./.github/actions/covguard
+        with:
+          lcov-file: lcov.info
+          config-file: config/covguard.toml
+          comment-pr: true

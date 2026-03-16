@@ -34,12 +34,206 @@ pub struct DiffParseResult {
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DiffError {
     /// The diff format is invalid or malformed.
-    #[error("invalid diff format: {0}")]
-    InvalidFormat(String),
+    #[error("{message}")]
+    InvalidFormat {
+        /// Detailed error message
+        message: String,
+        /// Line number where the error occurred (1-indexed)
+        line_number: Option<usize>,
+        /// Suggestion for fixing the error
+        suggestion: Option<String>,
+    },
+
+    /// Missing hunk header (@@ line).
+    #[error("Missing hunk header before line {line_number}")]
+    MissingHunkHeader {
+        /// Line number where the error occurred (1-indexed)
+        line_number: usize,
+    },
+
+    /// Invalid hunk header format.
+    #[error("Invalid hunk header at line {line_number}: '{actual}'")]
+    InvalidHunkHeader {
+        /// Line number where the error occurred (1-indexed)
+        line_number: usize,
+        /// The actual content that was found
+        actual: String,
+    },
 
     /// An I/O error occurred while reading the diff.
-    #[error("I/O error: {0}")]
-    IoError(String),
+    #[error("I/O error: {message}")]
+    IoError {
+        /// Error message
+        message: String,
+        /// Path to the file that couldn't be read
+        path: Option<String>,
+    },
+
+    /// Git command failed.
+    #[error("Git command failed: {message}")]
+    GitError {
+        /// Error message
+        message: String,
+        /// The git command that failed
+        command: Option<String>,
+    },
+
+    /// Empty diff.
+    #[error("Diff is empty or contains no changes")]
+    EmptyDiff,
+
+    /// Binary file in diff.
+    #[error("Binary file detected: {path}")]
+    BinaryFile {
+        /// Path to the binary file
+        path: String,
+    },
+}
+
+impl DiffError {
+    /// Creates an InvalidFormat error with a simple message (for backward compatibility).
+    pub fn invalid_format(message: impl Into<String>) -> Self {
+        Self::InvalidFormat {
+            message: message.into(),
+            line_number: None,
+            suggestion: None,
+        }
+    }
+
+    /// Creates an InvalidFormat error with line number context.
+    pub fn invalid_format_at_line(message: impl Into<String>, line_number: usize) -> Self {
+        Self::InvalidFormat {
+            message: message.into(),
+            line_number: Some(line_number),
+            suggestion: None,
+        }
+    }
+
+    /// Creates an IoError with file path context.
+    pub fn io_error_with_path(message: impl Into<String>, path: impl Into<String>) -> Self {
+        Self::IoError {
+            message: message.into(),
+            path: Some(path.into()),
+        }
+    }
+
+    /// Creates a GitError with command context.
+    pub fn git_error_with_command(message: impl Into<String>, command: impl Into<String>) -> Self {
+        Self::GitError {
+            message: message.into(),
+            command: Some(command.into()),
+        }
+    }
+}
+
+impl covguard_types::EnhancedError for DiffError {
+    fn code(&self) -> &'static str {
+        covguard_types::CODE_INVALID_DIFF
+    }
+
+    fn description(&self) -> &str {
+        match self {
+            Self::InvalidFormat { .. } => "Failed to parse diff",
+            Self::MissingHunkHeader { .. } => "Missing hunk header in diff",
+            Self::InvalidHunkHeader { .. } => "Invalid hunk header in diff",
+            Self::IoError { .. } => "Failed to read diff file",
+            Self::GitError { .. } => "Git command failed",
+            Self::EmptyDiff => "Diff is empty",
+            Self::BinaryFile { .. } => "Binary file in diff",
+        }
+    }
+
+    fn remediation(&self) -> &str {
+        match self {
+            Self::InvalidFormat { suggestion, .. } => {
+                suggestion.as_deref().unwrap_or(
+                    "Ensure the diff is in unified diff format.\n\
+                     Try using 'git diff' to generate the diff, or use --base/--head\n\
+                     to let covguard fetch the diff directly from git."
+                )
+            }
+            Self::MissingHunkHeader { .. } => {
+                "Hunks must start with '@@ -<start>,<count> +<start>,<count> @@'.\n\
+                 Ensure the diff was generated correctly with 'git diff' or\n\
+                 'diff -u'."
+            }
+            Self::InvalidHunkHeader { .. } => {
+                "Hunk headers must be in format '@@ -<old_start>,<old_count> +<new_start>,<new_count> @@'.\n\
+                 Ensure the diff was generated correctly."
+            }
+            Self::IoError { path, .. } => {
+                if path.is_some() {
+                    "Check that the file path is correct and readable.\n\
+                     Ensure the file exists and has appropriate permissions."
+                } else {
+                    "Check file permissions and disk availability."
+                }
+            }
+            Self::GitError { command, .. } => {
+                if command.is_some() {
+                    "Ensure git is installed and available in PATH.\n\
+                     Check that the repository exists and the refs are valid.\n\
+                     Avoid shallow clones in CI - use 'fetch-depth: 0' in GitHub Actions."
+                } else {
+                    "Ensure git is installed and available in PATH."
+                }
+            }
+            Self::EmptyDiff => {
+                "The diff contains no changes. This could mean:\n\
+                 1. No files were changed between base and head\n\
+                 2. The base and head refs are the same\n\
+                 3. All changes are in excluded paths"
+            }
+            Self::BinaryFile { .. } => {
+                "Binary files cannot be analyzed for coverage.\n\
+                 This is informational only - binary files are skipped\n\
+                 automatically during analysis."
+            }
+        }
+    }
+
+    fn help_uri(&self) -> &'static str {
+        "https://github.com/EffortlessMetrics/covguard/blob/main/docs/codes.md#invalid_diff"
+    }
+
+    fn format_enhanced(&self) -> String {
+        let context = match self {
+            Self::InvalidFormat { line_number, .. } => {
+                if let Some(ln) = line_number {
+                    format!("at line {}", ln)
+                } else {
+                    String::new()
+                }
+            }
+            Self::MissingHunkHeader { line_number } => format!("at line {}", line_number),
+            Self::InvalidHunkHeader { line_number, .. } => format!("at line {}", line_number),
+            Self::IoError { path: Some(p), .. } => format!("file: {}", p),
+            Self::GitError { command: Some(c), .. } => format!("command: {}", c),
+            Self::BinaryFile { path } => format!("file: {}", path),
+            _ => String::new(),
+        };
+
+        if context.is_empty() {
+            format!(
+                "Error [{}]: {}\n  {}\n\n  Hint: {}\n\n  See: {}\n",
+                self.code(),
+                self.description(),
+                self,
+                self.remediation(),
+                self.help_uri()
+            )
+        } else {
+            format!(
+                "Error [{}]: {}\n  {}\n  Context: {}\n\n  Hint: {}\n\n  See: {}\n",
+                self.code(),
+                self.description(),
+                self,
+                context,
+                self.remediation(),
+                self.help_uri()
+            )
+        }
+    }
 }
 
 /// Default diff provider backed by git subprocess calls and unified diff parsing.
@@ -73,7 +267,7 @@ pub fn load_diff_from_git(base: &str, head: &str, repo_root: &Path) -> Result<St
         .current_dir(repo_root)
         .args(["diff", base, head])
         .output()
-        .map_err(|e| DiffError::IoError(e.to_string()))?;
+        .map_err(|e| DiffError::IoError { message: e.to_string(), path: None })?;
     // Preserve prior CLI behavior: if git exits non-zero, still return stdout.
     // The caller can then treat empty output as "no changed lines".
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -177,7 +371,9 @@ pub fn parse_patch_with_meta(text: &str) -> Result<DiffParseResult, DiffError> {
     // Track binary files
     let mut binary_files: BTreeSet<String> = BTreeSet::new();
 
-    for line in lines {
+    for (line_idx, line) in lines.iter().enumerate() {
+        let line_num = line_idx + 1; // 1-indexed
+        
         // Track diff header for fallback file identity
         if let Some(rest) = line.strip_prefix("diff --git ") {
             let mut parts = rest.split_whitespace();
@@ -245,10 +441,10 @@ pub fn parse_patch_with_meta(text: &str) -> Result<DiffParseResult, DiffError> {
                     current_new_line = new_start;
                     in_hunk = true;
                 } else {
-                    return Err(DiffError::InvalidFormat(format!(
-                        "malformed hunk header: '{}'",
-                        line
-                    )));
+                    return Err(DiffError::InvalidHunkHeader {
+                        line_number: line_num + 1,
+                        actual: line.to_string(),
+                    });
                 }
             }
             continue;
@@ -708,7 +904,7 @@ fn main() {
             std::process::id()
         ));
         let err = load_diff_from_git("HEAD~1", "HEAD", &temp).expect_err("expected error");
-        assert!(matches!(err, DiffError::IoError(_)));
+        assert!(matches!(err, DiffError::IoError { .. }));
     }
 
     #[test]
