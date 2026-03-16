@@ -729,7 +729,7 @@ end_of_record
 
         assert!(matches!(
             result,
-            Err(LcovError::InvalidFormat(msg)) if msg.contains("without preceding SF")
+            Err(LcovError::MissingSourceFile { .. })
         ));
     }
 
@@ -740,7 +740,7 @@ end_of_record
 
         assert!(matches!(
             result,
-            Err(LcovError::InvalidFormat(msg)) if msg.contains("Invalid DA format")
+            Err(LcovError::InvalidDaRecord { .. })
         ));
     }
 
@@ -751,7 +751,7 @@ end_of_record
 
         assert!(matches!(
             result,
-            Err(LcovError::InvalidFormat(msg)) if msg.contains("Invalid line number")
+            Err(LcovError::InvalidFormat { message, .. }) if message.contains("Invalid line number")
         ));
     }
 
@@ -762,7 +762,7 @@ end_of_record
 
         assert!(matches!(
             result,
-            Err(LcovError::InvalidFormat(msg)) if msg.contains("Invalid hit count")
+            Err(LcovError::InvalidFormat { message, .. }) if message.contains("Invalid hit count")
         ));
     }
 
