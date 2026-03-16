@@ -23,7 +23,7 @@ covguard ensures every changed line in a PR has test coverage. It's a diff-scope
 - Cockpit aggregation support
 - Sensor composition patterns
 
-## Release **History**
+## Release History
 
 ### v0.1.0 (2026-03-12) - Initial Release
 
