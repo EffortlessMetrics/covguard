@@ -87,6 +87,9 @@ struct FileCoverage {
     /// Lines that were executed (have coverage).
     #[serde(default)]
     executed_lines: Vec<u32>,
+    /// Lines known to be missing from coverage.
+    #[serde(default)]
+    missing_lines: Vec<u32>,
     /// Summary statistics (not used by parser).
     #[serde(default)]
     summary: Option<FileSummary>,
@@ -128,8 +131,9 @@ struct FileSummary {
 /// # Line Coverage
 ///
 /// coverage.py only reports executed lines. Lines not in `executed_lines`
-/// are considered uncovered. The hit count is always 1 for executed lines
-/// since coverage.py doesn't track execution counts.
+/// are considered uncovered when explicitly listed in `missing_lines`.
+/// The hit count is always 1 for executed lines since coverage.py doesn't
+/// track execution counts.
 ///
 /// # Examples
 ///
@@ -172,6 +176,14 @@ pub fn parse_coverage_py_with_strip(
             .into_iter()
             .map(|line| (line, 1)) // coverage.py doesn't track hit counts, use 1
             .collect();
+
+        let line_coverage = file_coverage
+            .missing_lines
+            .into_iter()
+            .fold(line_coverage, |mut acc, line| {
+                acc.entry(line).or_insert(0);
+                acc
+            });
 
         // Always insert the file into the coverage map, even if it has no
         // executed lines. This lets the domain layer distinguish "file is
@@ -362,6 +374,30 @@ mod tests {
         // (with an empty line map) so domain can distinguish "uncovered" from "missing"
         assert!(coverage.contains_key("src/empty.py"));
         assert!(coverage.get("src/empty.py").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_parse_coverage_py_empty_executed_lines_with_missing_lines() {
+        let json = r#"{
+            "files": {
+                "src/empty.py": {
+                    "executed_lines": [],
+                    "missing_lines": [1, 3, 5],
+                    "summary": {
+                        "covered_lines": 0,
+                        "num_statements": 5,
+                        "percent_covered": 0.0
+                    }
+                }
+            }
+        }"#;
+
+        let coverage = parse_coverage_py(json).unwrap();
+        let file = coverage.get("src/empty.py").unwrap();
+        assert_eq!(file.get(&1), Some(&0));
+        assert_eq!(file.get(&3), Some(&0));
+        assert_eq!(file.get(&5), Some(&0));
+        assert_eq!(file.len(), 3);
     }
 
     #[test]

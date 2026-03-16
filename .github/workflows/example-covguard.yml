@@ -75,10 +75,8 @@ jobs:
         id: covguard
         uses: ./.github/actions/covguard
         with:
-          coverage-file: lcov.info
-          fail-on-uncovered: true
+          lcov-file: lcov.info
           comment-pr: true
-          annotations: true
 
       # Use outputs in subsequent steps
       - name: Coverage summary
@@ -109,8 +107,8 @@ jobs:
       - name: Check diff coverage with threshold
         uses: ./.github/actions/covguard
         with:
-          coverage-file: lcov.info
-          fail-threshold: 80
+          lcov-file: lcov.info
+          threshold: 80
           comment-pr: true
           comment-mode: update
 
@@ -135,80 +133,9 @@ jobs:
       - name: Check diff coverage with SARIF
         uses: ./.github/actions/covguard
         with:
-          coverage-file: lcov.info
+          lcov-file: lcov.info
           sarif-output: true
-          annotations: true
-          fail-on-uncovered: false  # Non-blocking for SARIF upload
-
----
-
-# Alternative: Complete workflow for different coverage formats
-
-name: Diff Coverage (Multi-Format)
-
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  # Python coverage.py example
-  python-coverage:
-    name: Python Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          pip install pytest pytest-cov
-
-      - name: Run tests with coverage
-        run: |
-          pytest --cov=src --cov-report=json:coverage.json
-
-      - name: Check diff coverage
-        uses: ./.github/actions/covguard
-        with:
-          coverage-file: coverage.json
-          coverage-format: coverage-py
-          fail-on-uncovered: true
-          comment-pr: true
-
-  # Java JaCoCo example
-  java-coverage:
-    name: Java Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Build with Maven
-        run: |
-          mvn test jacoco:report
-
-      - name: Check diff coverage
-        uses: ./.github/actions/covguard
-        with:
-          coverage-file: target/site/jacoco/jacoco.xml
-          coverage-format: jacoco
-          fail-on-uncovered: true
-          comment-pr: true
+          threshold: 0  # Non-blocking for SARIF upload
 
 ---
 
@@ -237,9 +164,8 @@ jobs:
       - name: Check diff coverage
         uses: ./.github/actions/covguard
         with:
-          coverage-file: lcov.info
-          version: v0.3.0  # Pin to specific version
-          fail-threshold: 100
+          lcov-file: lcov.info
+          threshold: 100
           comment-pr: true
           comment-mode: delete-on-pass  # Clean up comments on success
 
@@ -270,6 +196,6 @@ jobs:
       - name: Check diff coverage
         uses: ./.github/actions/covguard
         with:
-          coverage-file: lcov.info
+          lcov-file: lcov.info
           config-file: config/covguard.toml
           comment-pr: true

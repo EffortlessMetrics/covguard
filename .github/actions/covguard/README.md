@@ -18,9 +18,9 @@ Unlike global coverage tools, covguard focuses only on the lines you're changing
 ## Features
 
 - 🔍 **Diff-scoped analysis** — Only checks new/changed lines
-- 📊 **Multiple formats** — LCOV, JaCoCo XML, coverage.py JSON
+- 📊 **LCOV coverage** support (JaCoCo/coverage-py adapters in progress)
 - 💬 **PR comments** — Automatic comments with coverage results
-- 🚨 **GitHub annotations** — Inline warnings for uncovered lines
+- 📁 **GitHub annotations** — CLI-managed via covguard configuration
 - 📈 **SARIF output** — Integration with GitHub Code Scanning
 - 🎯 **Threshold support** — Set minimum coverage percentages
 - ⚙️ **Configurable** — Via inputs or configuration file
@@ -53,19 +53,17 @@ jobs:
       - name: Check diff coverage
         uses: EffortlessMetrics/covguard@v1
         with:
-          coverage-file: lcov.info
+          lcov-file: lcov.info
 ```
 
-### With PR Comments and Annotations
+### With PR Comments
 
 ```yaml
 - name: Check diff coverage
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
+    lcov-file: lcov.info
     comment-pr: true
-    annotations: true
-    fail-on-uncovered: true
 ```
 
 ### With Minimum Threshold
@@ -74,8 +72,8 @@ jobs:
 - name: Check diff coverage (80% minimum)
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
-    fail-threshold: 80
+    lcov-file: lcov.info
+    threshold: 80
     comment-pr: true
 ```
 
@@ -83,23 +81,20 @@ jobs:
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `coverage-file` | Path to coverage report (LCOV, JaCoCo, or coverage.py) | ✅ Yes | — |
-| `coverage-format` | Format: `lcov`, `jacoco`, `coverage-py`. Auto-detected if not specified | No | Auto |
-| `diff-base` | Base ref for diff (e.g., `origin/main`) | No | `${{ github.base_ref }}` |
-| `diff-head` | Head ref for diff (e.g., `${{ github.sha }}`) | No | `${{ github.sha }}` |
+| `lcov-file` | Path to LCOV coverage report | ✅ Yes | — |
+| `diff-base` | Base ref for diff (optional) | No | `""` |
+| `diff-head` | Head ref for diff (optional) | No | `""` |
 | `diff-file` | Pre-generated patch file. If provided, base/head are ignored | No | — |
-| `fail-threshold` | Minimum coverage % to pass (0-100) | No | `0` |
-| `fail-on-uncovered` | Fail if any changed lines are uncovered | No | `true` |
+| `threshold` | Minimum coverage % to pass (0-100) | No | `""` |
 | `comment-pr` | Post comment on PR with results | No | `true` |
 | `comment-mode` | How to post comments: `create`, `update`, `delete-on-pass` | No | `update` |
-| `annotations` | Create GitHub annotations for uncovered lines | No | `true` |
 | `sarif-output` | Generate SARIF for GitHub Code Scanning | No | `false` |
+| `scope` | Diff line scope (`added` or `touched`) | No | `""` |
+| `profile` | Built-in coverage policy profile | No | `""` |
 | `report-output` | Path for JSON report | No | `artifacts/covguard/report.json` |
 | `markdown-output` | Path for markdown comment | No | `artifacts/covguard/comment.md` |
-| `token` | GitHub token for PR comments | No | `${{ github.token }}` |
-| `version` | covguard version to install | No | `latest` |
+| `token` | GitHub token for PR comments | No | `""` (falls back to `github.token`) |
 | `working-directory` | Working directory for commands | No | `.` |
-| `skip-missing-coverage` | Skip files without coverage data | No | `false` |
 | `config-file` | Path to covguard.toml configuration file | No | — |
 
 ## Outputs
@@ -121,7 +116,7 @@ jobs:
   id: covguard
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
+    lcov-file: lcov.info
 
 - name: Summary
   run: |
@@ -141,34 +136,7 @@ jobs:
 - name: Check diff coverage
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
-    coverage-format: lcov  # Optional, auto-detected from .info extension
-```
-
-### JaCoCo (Java/Kotlin)
-
-```yaml
-- name: Generate JaCoCo coverage
-  run: mvn test jacoco:report
-
-- name: Check diff coverage
-  uses: EffortlessMetrics/covguard@v1
-  with:
-    coverage-file: target/site/jacoco/jacoco.xml
-    coverage-format: jacoco
-```
-
-### coverage.py (Python)
-
-```yaml
-- name: Generate coverage.py coverage
-  run: pytest --cov=src --cov-report=json:coverage.json
-
-- name: Check diff coverage
-  uses: EffortlessMetrics/covguard@v1
-  with:
-    coverage-file: coverage.json
-    coverage-format: coverage-py
+    lcov-file: lcov.info
 ```
 
 ## PR Comment Modes
@@ -186,21 +154,15 @@ Deletes the comment when coverage passes — keeps PRs clean when everything is 
 - name: Check diff coverage
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
+    lcov-file: lcov.info
     comment-pr: true
     comment-mode: delete-on-pass
 ```
 
 ## GitHub Annotations
 
-When `annotations: true` (default), covguard creates inline warnings for each uncovered line:
-
-```
-warning[src/main.rs:42]: Changed line has no test coverage
-warning[src/utils.rs:15]: Changed line has no test coverage
-```
-
-These appear in the PR's "Files changed" view and the Actions summary.
+The action posts report-based results and optional Markdown comments.
+Inline annotation behavior is managed through CLI configuration.
 
 ## SARIF Integration
 
@@ -210,9 +172,9 @@ For GitHub Code Scanning integration:
 - name: Check diff coverage
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
+    lcov-file: lcov.info
     sarif-output: true
-    fail-on-uncovered: false  # Non-blocking for SARIF
+    threshold: 0
 ```
 
 Results appear in the repository's Security > Code Scanning alerts.
@@ -248,7 +210,7 @@ Then reference it in your workflow:
 - name: Check diff coverage
   uses: EffortlessMetrics/covguard@v1
   with:
-    coverage-file: lcov.info
+    lcov-file: lcov.info
     config-file: covguard.toml
 ```
 
@@ -316,11 +278,10 @@ jobs:
         id: covguard
         uses: EffortlessMetrics/covguard@v1
         with:
-          coverage-file: lcov.info
-          fail-threshold: 80
+          lcov-file: lcov.info
+          threshold: 80
           comment-pr: true
           comment-mode: update
-          annotations: true
 
       - name: Summary
         run: |
@@ -345,14 +306,14 @@ The action uses these exit codes:
 ### "Failed to determine latest version"
 
 This happens when the GitHub API rate limit is exceeded. Solution:
-1. Pin to a specific version: `version: v0.3.0`
+1. Pin the local action to a repository tag/path in your workflow
 2. Or use a GitHub token with higher rate limits
 
 ### "No coverage data found for file"
 
 This means a file with changes has no coverage data. Options:
 1. Add tests for the file
-2. Use `skip-missing-coverage: true` to skip these files
+2. Use `ignore` settings in `covguard.toml`
 3. Use an ignore pattern in `covguard.toml`
 
 ### "fetch-depth: 0 is required"

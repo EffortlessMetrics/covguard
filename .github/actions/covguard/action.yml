@@ -11,13 +11,13 @@ inputs:
     description: 'Path to the LCOV coverage report file'
     required: true
   diff-base:
-    description: 'Base ref for diff comparison (e.g., origin/main, ${{ github.base_ref }})'
+    description: 'Base ref for diff comparison (e.g., origin/main).'
     required: false
-    default: '${{ github.base_ref }}'
+    default: ''
   diff-head:
-    description: 'Head ref for diff comparison (e.g., ${{ github.sha }})'
+    description: 'Head ref for diff comparison (e.g., SHA).'
     required: false
-    default: '${{ github.sha }}'
+    default: ''
   diff-file:
     description: 'Path to a pre-generated patch/diff file. If provided, diff-base and diff-head are ignored.'
     required: false
@@ -57,7 +57,7 @@ inputs:
   token:
     description: 'GitHub token for PR comments (uses GITHUB_TOKEN by default)'
     required: false
-    default: '${{ github.token }}'
+    default: ''
   config-file:
     description: 'Path to covguard configuration file (covguard.toml)'
     required: false
@@ -139,11 +139,30 @@ runs:
         if [ -n "$INPUT_DIFF_FILE" ]; then
           COVGUARD_ARGS+=("--diff-file" "$INPUT_DIFF_FILE")
         else
-          if [ -n "$INPUT_DIFF_BASE" ]; then
-            COVGUARD_ARGS+=("--base" "$INPUT_DIFF_BASE")
+          DIFF_BASE="$INPUT_DIFF_BASE"
+          DIFF_HEAD="$INPUT_DIFF_HEAD"
+
+          if [ -z "$DIFF_BASE" ] || [ -z "$DIFF_HEAD" ]; then
+            if [ -f "$GITHUB_EVENT_PATH" ]; then
+              EVENT_BASE=$(jq -r '.pull_request.base.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+              EVENT_HEAD=$(jq -r '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+              if [ -z "$DIFF_BASE" ] && [ -n "$EVENT_BASE" ]; then
+                DIFF_BASE="$EVENT_BASE"
+              fi
+              if [ -z "$DIFF_HEAD" ] && [ -n "$EVENT_HEAD" ]; then
+                DIFF_HEAD="$EVENT_HEAD"
+              fi
+            fi
+            if [ -z "$DIFF_BASE" ] && [ -n "$GITHUB_BASE_REF" ]; then
+              DIFF_BASE="$GITHUB_BASE_REF"
+            fi
           fi
-          if [ -n "$INPUT_DIFF_HEAD" ]; then
-            COVGUARD_ARGS+=("--head" "$INPUT_DIFF_HEAD")
+
+          if [ -n "$DIFF_BASE" ]; then
+            COVGUARD_ARGS+=("--base" "$DIFF_BASE")
+          fi
+          if [ -n "$DIFF_HEAD" ]; then
+            COVGUARD_ARGS+=("--head" "$DIFF_HEAD")
           fi
         fi
 
@@ -224,7 +243,7 @@ runs:
       if: inputs.comment-pr == 'true' && github.event_name == 'pull_request' && always()
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.token }}
+        GITHUB_TOKEN: ${{ inputs.token || github.token }}
         COMMENT_MODE: ${{ inputs.comment-mode }}
         MARKDOWN_PATH: ${{ inputs.markdown-output }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -239,12 +258,14 @@ runs:
           exit 0
         fi
 
+        MARKER="<!-- covguard-comment pr=$PR_NUMBER -->"
+
         # Handle delete-on-pass mode
         if [ "$COMMENT_MODE" = "delete-on-pass" ] && [ "$PASSED" = "true" ]; then
           echo "Coverage check passed, deleting any existing comment..."
 
           EXISTING_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
-            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- covguard-comment -->")) | .id' | head -1 || true)
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("'"$MARKER"'")) | .id' | head -1 || true)
 
           if [ -n "$EXISTING_COMMENT_ID" ]; then
             gh api --method DELETE repos/$GITHUB_REPOSITORY/issues/comments/$EXISTING_COMMENT_ID
@@ -256,12 +277,9 @@ runs:
         # Read markdown content
         COMMENT_BODY=$(cat "$MARKDOWN_PATH")
 
-        # Add marker for identification
-        MARKER="<!-- covguard-comment pr=$PR_NUMBER -->"
-
         # Check for existing comment
         EXISTING_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
-          --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- covguard-comment")) | .id' | head -1 || true)
+          --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("'"$MARKER"'")) | .id' | head -1 || true)
 
         if [ "$COMMENT_MODE" = "update" ] && [ -n "$EXISTING_COMMENT_ID" ]; then
           echo "Updating existing comment..."
