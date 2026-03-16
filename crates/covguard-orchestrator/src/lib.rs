@@ -2028,7 +2028,7 @@ end_of_record
     fn test_app_error_from_diff_error() {
         use covguard_adapters_diff::DiffError;
 
-        let err = DiffError::InvalidFormat("bad diff".to_string());
+        let err = DiffError::invalid_format("bad diff");
         let app: AppError = err.into();
         assert!(matches!(
             app,
@@ -2040,7 +2040,7 @@ end_of_record
     fn test_app_error_from_lcov_error() {
         use covguard_adapters_coverage::LcovError;
 
-        let err = LcovError::InvalidFormat("bad lcov".to_string());
+        let err = LcovError::invalid_format("bad lcov");
         let app: AppError = err.into();
         assert!(matches!(
             app,
