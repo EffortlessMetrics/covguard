@@ -434,8 +434,12 @@ impl ProfileResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex as StdMutex;
     use std::thread;
     use std::time::Duration;
+
+    /// Serializes tests that mutate the global `PROFILING_ENABLED` flag.
+    static TEST_LOCK: StdMutex<()> = StdMutex::new(());
 
     #[test]
     fn test_timing_stats() {
@@ -454,6 +458,7 @@ mod tests {
 
     #[test]
     fn test_profile_stats() {
+        let _lock = TEST_LOCK.lock().unwrap();
         set_profiling_enabled(true);
 
         let stats = ProfileStats::new();
@@ -472,6 +477,7 @@ mod tests {
 
     #[test]
     fn test_profiling_disabled() {
+        let _lock = TEST_LOCK.lock().unwrap();
         set_profiling_enabled(false);
 
         let stats = ProfileStats::new();
