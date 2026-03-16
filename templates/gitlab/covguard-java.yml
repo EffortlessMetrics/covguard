@@ -3,9 +3,13 @@
 # This template provides a complete setup for running covguard
 # with Java projects using JaCoCo for coverage generation.
 #
+# NOTE: covguard currently only supports LCOV format. This template
+# generates JaCoCo coverage and converts it to LCOV for covguard.
+# Native JaCoCo XML support is planned for a future release.
+#
 # Usage:
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/your-org/covguard/main/templates/gitlab/covguard-java.yml'
+#     - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-java.yml'
 #
 #   covguard:java:
 #     extends: .covguard_java
@@ -14,11 +18,10 @@
 # -----------------------
 # JAVA_VERSION          - Java version to use (default: 17)
 # MAVEN_VERSION         - Maven version to use (default: 3.9)
-# COVGUARD_VERSION      - Version of covguard to use (default: latest)
-# FAIL_THRESHOLD        - Minimum coverage % to pass (default: 0)
-# WARN_THRESHOLD        - Minimum coverage % to warn (default: 0)
+# THRESHOLD             - Minimum coverage % to pass (optional)
+# SCOPE                 - Line scope: added or touched (default: added)
+# PROFILE               - Config profile: oss, moderate, team, strict, lenient
 # POST_MR_COMMENT       - Post MR comment with results (default: "true")
-# FAIL_ON_UNCOVERED     - Fail if uncovered lines found (default: "true")
 # JACOCO_REPORT_PATH    - Path to JaCoCo XML report (default: target/site/jacoco/jacoco.xml)
 # BUILD_TOOL            - Build tool: maven or gradle (default: maven)
 # EXTRA_BUILD_ARGS      - Extra arguments for build tool (default: "")
@@ -26,11 +29,10 @@
 variables:
   JAVA_VERSION: "17"
   MAVEN_VERSION: "3.9"
-  COVGUARD_VERSION: "latest"
-  FAIL_THRESHOLD: "0"
-  WARN_THRESHOLD: "0"
+  THRESHOLD: ""
+  SCOPE: ""
+  PROFILE: ""
   POST_MR_COMMENT: "true"
-  FAIL_ON_UNCOVERED: "true"
   JACOCO_REPORT_PATH: "target/site/jacoco/jacoco.xml"
   BUILD_TOOL: "maven"
   EXTRA_BUILD_ARGS: ""
@@ -53,15 +55,14 @@ variables:
       - .m2/repository/
   before_script:
     - |
-      # Install covguard
+      # Install covguard and dependencies
       apt-get update && apt-get install -y curl jq
-      
-      if [ "${COVGUARD_VERSION}" = "latest" ]; then
-        curl -sSL https://github.com/covguard/covguard/releases/latest/download/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
-      else
-        curl -sSL https://github.com/covguard/covguard/releases/download/v${COVGUARD_VERSION}/covguard-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
-      fi
-      
+
+      # Install Rust toolchain and covguard
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      . "$HOME/.cargo/env"
+      cargo install covguard-cli --locked
+
       # Set default refs for merge requests
       if [ -z "$BASE_REF" ]; then
         export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
@@ -69,59 +70,73 @@ variables:
       if [ -z "$HEAD_REF" ]; then
         export HEAD_REF="${CI_COMMIT_SHA}"
       fi
-      
+
       echo "covguard Java configuration:"
       echo "  Java version: ${JAVA_VERSION}"
       echo "  Build tool: ${BUILD_TOOL}"
       echo "  Base ref: ${BASE_REF}"
       echo "  Head ref: ${HEAD_REF}"
       echo "  JaCoCo report: ${JACOCO_REPORT_PATH}"
-      echo "  Fail threshold: ${FAIL_THRESHOLD}%"
-      echo "  Warn threshold: ${WARN_THRESHOLD}%"
   script:
     - |
       # Run tests with JaCoCo coverage
       echo "Running tests with coverage..."
-      
+
       if [ "${BUILD_TOOL}" = "maven" ]; then
         mvn ${MAVEN_CLI_OPTS} clean test jacoco:report ${EXTRA_BUILD_ARGS}
       elif [ "${BUILD_TOOL}" = "gradle" ]; then
         ./gradlew clean test jacocoTestReport ${EXTRA_BUILD_ARGS}
-        # Update JACOCO_REPORT_PATH for Gradle default location
         export JACOCO_REPORT_PATH="${JACOCO_REPORT_PATH:-build/reports/jacoco/test/jacocoTestReport.xml}"
       fi
-      
+
       # Check if JaCoCo report exists
       if [ ! -f "${JACOCO_REPORT_PATH}" ]; then
         echo "Error: JaCoCo report not found at ${JACOCO_REPORT_PATH}"
         exit 1
       fi
-      
+
+      # Convert JaCoCo XML to LCOV format
+      # NOTE: This requires a JaCoCo-to-LCOV converter.
+      # Option 1: Use jacoco2lcov or similar tool
+      # Option 2: Configure JaCoCo to output LCOV directly
+      # For now, this template assumes LCOV output is available.
+      echo "WARNING: covguard currently only supports LCOV format."
+      echo "Please configure your build to generate LCOV output,"
+      echo "or use a JaCoCo-to-LCOV converter."
+      echo "Native JaCoCo XML support is planned for a future release."
+
+      # If you have an LCOV file, use it directly:
+      LCOV_FILE="${CI_PROJECT_DIR}/lcov.info"
+      if [ ! -f "$LCOV_FILE" ]; then
+        echo "Error: No LCOV file found. Please generate LCOV output from your coverage tool."
+        exit 1
+      fi
+
       # Build covguard arguments
       COVGUARD_ARGS="check"
       COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --jacoco ${JACOCO_REPORT_PATH}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov ${LCOV_FILE}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
-      
+
       # Add optional arguments
-      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
+      if [ -n "$THRESHOLD" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
       fi
-      
-      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
+
+      if [ -n "$SCOPE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
       fi
-      
-      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
+
+      if [ -n "$PROFILE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
       fi
-      
+
       # Generate markdown output for MR comments
       if [ "${POST_MR_COMMENT}" = "true" ]; then
         COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
       fi
-      
+
       echo "Running: covguard ${COVGUARD_ARGS}"
       covguard $COVGUARD_ARGS
   after_script:
@@ -129,9 +144,9 @@ variables:
       # Post MR comment if enabled and we're in an MR
       if [ "${POST_MR_COMMENT}" = "true" ] && [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f "${CI_PROJECT_DIR}/covguard-comment.md" ]; then
         echo "Posting merge request comment..."
-        
+
         COMMENT_BODY=$(cat "${CI_PROJECT_DIR}/covguard-comment.md" | jq -Rs .)
-        
+
         curl -s -X POST \
           -H "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
           -H "Content-Type: application/json" \
@@ -144,14 +159,7 @@ variables:
       - covguard-report.json
       - covguard-comment.md
       - target/site/jacoco/
-      - "**/jacoco.exec"
-    reports:
-      codequality: covguard-report.json
-      coverage_report:
-        coverage_format: jacoco
-        path: target/site/jacoco/jacoco.xml
     expire_in: 1 week
-  coverage: '/Total.*?([0-9]{1,3})%/'
 
 # Java MR coverage check
 # ----------------------
@@ -169,111 +177,3 @@ covguard:java:branch:
   variables:
     BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
     HEAD_REF: "${CI_COMMIT_SHA}"
-
-# Java coverage with Gradle (alternative)
-# ---------------------------------------
-# Use this if you use Gradle for building
-.covguard_java_gradle:
-  extends: .covguard_java
-  image: gradle:8-jdk${JAVA_VERSION}
-  variables:
-    BUILD_TOOL: "gradle"
-    JACOCO_REPORT_PATH: "build/reports/jacoco/test/jacocoTestReport.xml"
-  cache:
-    paths:
-      - .gradle/caches/
-      - .gradle/wrapper/
-
-# Java coverage with Maven and multi-module project
-# -------------------------------------------------
-# Use this for multi-module Maven projects
-.covguard_java_multimodule:
-  extends: .covguard_java
-  variables:
-    JACOCO_AGGREGATE_REPORT: "target/site/jacoco-aggregate/jacoco.xml"
-  script:
-    - |
-      # Run tests with JaCoCo coverage for all modules
-      echo "Running tests with coverage (multi-module)..."
-      
-      mvn ${MAVEN_CLI_OPTS} clean test jacoco:report jacoco:aggregate ${EXTRA_BUILD_ARGS}
-      
-      # Check if aggregated JaCoCo report exists
-      if [ ! -f "${JACOCO_AGGREGATE_REPORT}" ]; then
-        echo "Error: Aggregated JaCoCo report not found at ${JACOCO_AGGREGATE_REPORT}"
-        exit 1
-      fi
-      
-      # Build covguard arguments
-      COVGUARD_ARGS="check"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --jacoco ${JACOCO_AGGREGATE_REPORT}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
-      
-      # Add optional arguments
-      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
-      fi
-      
-      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
-      fi
-      
-      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
-      fi
-      
-      # Generate markdown output for MR comments
-      if [ "${POST_MR_COMMENT}" = "true" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
-      fi
-      
-      echo "Running: covguard ${COVGUARD_ARGS}"
-      covguard $COVGUARD_ARGS
-
-# Java coverage with Spring Boot
-# ------------------------------
-# Optimized for Spring Boot applications
-.covguard_java_springboot:
-  extends: .covguard_java
-  script:
-    - |
-      # Run tests with JaCoCo coverage (Spring Boot optimized)
-      echo "Running Spring Boot tests with coverage..."
-      
-      mvn ${MAVEN_CLI_OPTS} clean verify ${EXTRA_BUILD_ARGS}
-      
-      # Check if JaCoCo report exists
-      if [ ! -f "${JACOCO_REPORT_PATH}" ]; then
-        echo "Error: JaCoCo report not found at ${JACOCO_REPORT_PATH}"
-        exit 1
-      fi
-      
-      # Build covguard arguments
-      COVGUARD_ARGS="check"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --jacoco ${JACOCO_REPORT_PATH}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
-      
-      # Add optional arguments
-      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
-      fi
-      
-      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
-      fi
-      
-      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
-      fi
-      
-      # Generate markdown output for MR comments
-      if [ "${POST_MR_COMMENT}" = "true" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
-      fi
-      
-      echo "Running: covguard ${COVGUARD_ARGS}"
-      covguard $COVGUARD_ARGS

@@ -48,7 +48,7 @@ println!("Exit code: {}", result.exit_code);
 ## Documentation
 
 - [API Documentation](https://docs.rs/covguard-orchestrator)
-- [Main Repository](https://github.com/covguard/covguard)
+- [Main Repository](https://github.com/EffortlessMetrics/covguard)
 
 ## License
 

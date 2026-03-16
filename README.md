@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/covguard-cli)](https://crates.io/crates/covguard-cli)
 [![docs.rs](https://docs.rs/covguard-cli/badge.svg)](https://docs.rs/covguard-cli)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/effortlessmetrics/cov-guard/workflows/CI/badge.svg)](https://github.com/effortlessmetrics/cov-guard/actions/workflows/ci.yml)
+[![CI](https://github.com/EffortlessMetrics/covguard/workflows/CI/badge.svg)](https://github.com/EffortlessMetrics/covguard/actions/workflows/ci.yml)
 
 **covguard** is a diff-scoped coverage gate for pull requests.
 
@@ -14,16 +14,13 @@ It answers one question:
 ## Features
 
 - **Diff-scoped analysis** — Only evaluates added or changed lines, not entire codebase
-- **Multiple coverage formats** — LCOV, JaCoCo XML (Java), and coverage.py JSON (Python)
-- **Multiple diff sources** — Accepts patch files, stdin (`--diff-file -`), or git refs (base/head SHAs)
+- **LCOV coverage format** — Full LCOV support with path normalization and multi-file merging
+- **Multiple diff sources** — Accepts patch files or git refs (base/head SHAs)
 - **Configurable policies** — Built-in profiles (`oss`, `team`, `strict`) or custom TOML config
 - **Multiple output formats** — JSON receipts, markdown PR comments, SARIF, GitHub annotations
 - **Ignore directives** — Support `covguard: ignore` comments in source code
 - **Deterministic output** — Sorted findings for reproducible results
 - **Schema-compliant** — Reports validate against JSON schemas in `contracts/schemas/`
-- **Enhanced error messages** — Actionable remediation hints with documentation links
-- **Performance profiling** — `--timing` flag for diagnosing slow operations
-- **CI/CD integration** — Official GitHub Action and GitLab CI templates included
 - **Fast** — No runtime allocations in hot paths; minimal dependencies
 
 ## Installation
@@ -39,8 +36,8 @@ This installs the `covguard` binary (published as `covguard-cli` on crates.io).
 ### From source
 
 ```bash
-git clone https://github.com/effortlessmetrics/cov-guard.git
-cd cov-guard
+git clone https://github.com/EffortlessMetrics/covguard.git
+cd covguard
 cargo install --path crates/covguard-cli
 ```
 
@@ -101,12 +98,10 @@ covguard check [OPTIONS]
 | `--base <SHA>` | Base git ref (requires `--head`) |
 | `--head <SHA>` | Head git ref (requires `--base`) |
 
-**Coverage input options** (choose one or more):
+**Coverage input options**:
 | Option | Description |
 |--------|-------------|
 | `--lcov <PATH>` | Path to LCOV coverage file (repeatable for multiple files) |
-| `--jacoco <PATH>` | Path to JaCoCo XML coverage file (Java projects) |
-| `--coverage-py <PATH>` | Path to coverage.py JSON coverage file (Python projects) |
 
 **Output options**:
 | Option | Default | Description |
@@ -170,25 +165,31 @@ The canonical output is a schema-compliant JSON receipt at `artifacts/covguard/r
 
 ```json
 {
-  "schema_id": "covguard.report.v1",
-  "run_id": "uuid",
-  "timestamp": "2026-03-13T00:00:00Z",
-  "verdict": "fail",
-  "summary": {
-    "total_changed_lines": 10,
-    "covered_lines": 7,
-    "uncovered_lines": 3,
-    "diff_coverage_pct": 70.0
+  "schema": "covguard.report.v1",
+  "tool": { "name": "covguard", "version": "0.1.0" },
+  "run": { "started_at": "2026-03-13T00:00:00Z" },
+  "verdict": {
+    "status": "fail",
+    "counts": { "info": 0, "warn": 0, "error": 2 },
+    "reasons": ["uncovered_lines", "below_threshold"]
   },
   "findings": [
     {
-      "check_id": "covguard.diff.uncovered_line",
       "severity": "error",
-      "path": "src/lib.rs",
-      "line": 42,
-      "message": "Changed line has no test coverage"
+      "check_id": "diff.uncovered_line",
+      "code": "covguard.diff.uncovered_line",
+      "message": "Uncovered changed line (hits=0).",
+      "location": { "path": "src/lib.rs", "line": 42 }
     }
-  ]
+  ],
+  "data": {
+    "scope": "added",
+    "threshold_pct": 80.0,
+    "changed_lines_total": 10,
+    "covered_lines": 7,
+    "uncovered_lines": 3,
+    "diff_coverage_pct": 70.0
+  }
 }
 ```
 
@@ -259,37 +260,7 @@ path_strip = ["/home/runner/work/repo/repo/"]
 
 ## Integration Examples
 
-### Official GitHub Action
-
-Use the official covguard GitHub Action (recommended):
-
-```yaml
-name: Coverage Gate
-
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: effortlessmetrics/covguard/actions/covguard@v1
-        with:
-          base-sha: ${{ github.event.pull_request.base.sha }}
-          head-sha: ${{ github.sha }}
-          lcov-path: artifacts/coverage/lcov.info
-```
-
-See [`.github/actions/covguard/`](.github/actions/covguard/) for action documentation.
-
-### Manual GitHub Actions Setup
-
-For more control, run covguard directly:
+### GitHub Actions
 
 ```yaml
 name: Coverage Gate
@@ -331,8 +302,6 @@ jobs:
 ```
 
 ### GitLab CI
-
-Use the provided GitLab CI templates (see [`templates/gitlab/`](templates/gitlab/)):
 
 ```yaml
 coverage-gate:

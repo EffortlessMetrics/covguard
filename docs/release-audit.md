@@ -110,8 +110,8 @@ The workspace package section should be updated with correct values:
 version = "0.1.0"
 edition = "2021"  # Changed from "2024" - 2024 edition is not yet stable
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/effortlessmetrics/cov-guard"
-homepage = "https://github.com/effortlessmetrics/cov-guard"
+repository = "https://github.com/EffortlessMetrics/covguard"
+homepage = "https://github.com/EffortlessMetrics/covguard"
 readme = "README.md"
 keywords = ["coverage", "diff", "testing", "ci", "code-coverage"]
 categories = ["development-tools::testing", "command-line-utilities"]

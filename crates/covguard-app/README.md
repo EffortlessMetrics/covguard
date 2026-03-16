@@ -46,7 +46,7 @@ let result = check(request)?;
 ## Documentation
 
 - [API Documentation](https://docs.rs/covguard-app)
-- [Main Repository](https://github.com/covguard/covguard)
+- [Main Repository](https://github.com/EffortlessMetrics/covguard)
 
 ## License
 

@@ -4,7 +4,7 @@
 # The pipeline will fail if the diff coverage falls below the threshold.
 
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-base.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
 
 variables:
   # Path to coverage report

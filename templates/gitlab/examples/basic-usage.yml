@@ -7,7 +7,7 @@
 
 # Include the base template
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-base.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
 
 # Define variables for covguard
 variables:

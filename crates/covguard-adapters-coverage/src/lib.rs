@@ -183,7 +183,7 @@ impl covguard_types::EnhancedError for LcovError {
     }
 
     fn help_uri(&self) -> &'static str {
-        "https://github.com/cov-guard/covguard/blob/main/docs/codes.md#invalid_lcov"
+        "https://github.com/EffortlessMetrics/covguard/blob/main/docs/codes.md#invalid_lcov"
     }
 
     fn format_enhanced(&self) -> String {

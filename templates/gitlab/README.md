@@ -1,6 +1,6 @@
 # covguard GitLab CI Templates
 
-This directory contains reusable GitLab CI/CD templates for integrating [covguard](https://github.com/covguard/covguard) into your pipelines. covguard is a diff-scoped coverage gate that ensures new code changes are properly covered by tests.
+This directory contains reusable GitLab CI/CD templates for integrating [covguard](https://github.com/EffortlessMetrics/covguard) into your pipelines. covguard is a diff-scoped coverage gate that ensures new code changes are properly covered by tests.
 
 ## Quick Start
 
@@ -10,7 +10,7 @@ Add the following to your `.gitlab-ci.yml`:
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-base.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
 
 variables:
   COVERAGE_FILE: "coverage/lcov.info"
@@ -25,7 +25,7 @@ covguard:mr:
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-rust.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-rust.yml'
 
 covguard:rust:
   extends: .covguard_rust
@@ -35,7 +35,7 @@ covguard:rust:
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-python.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-python.yml'
 
 covguard:python:
   extends: .covguard_python
@@ -48,7 +48,7 @@ covguard:python:
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-java.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-java.yml'
 
 covguard:java:
   extends: .covguard_java
@@ -189,7 +189,7 @@ For monorepos or multi-language projects:
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/covguard/covguard/main/templates/gitlab/covguard-base.yml'
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
 
 covguard:backend:
   extends: .covguard_base

@@ -193,7 +193,7 @@ impl covguard_types::EnhancedError for DiffError {
     }
 
     fn help_uri(&self) -> &'static str {
-        "https://github.com/cov-guard/covguard/blob/main/docs/codes.md#invalid_diff"
+        "https://github.com/EffortlessMetrics/covguard/blob/main/docs/codes.md#invalid_diff"
     }
 
     fn format_enhanced(&self) -> String {

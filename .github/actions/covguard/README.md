@@ -51,7 +51,7 @@ jobs:
           cargo llvm-cov --lcov --output-path lcov.info
 
       - name: Check diff coverage
-        uses: covguard/covguard@v1
+        uses: EffortlessMetrics/covguard@v1
         with:
           coverage-file: lcov.info
 ```
@@ -60,7 +60,7 @@ jobs:
 
 ```yaml
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
     comment-pr: true
@@ -72,7 +72,7 @@ jobs:
 
 ```yaml
 - name: Check diff coverage (80% minimum)
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
     fail-threshold: 80
@@ -119,7 +119,7 @@ jobs:
 ```yaml
 - name: Check diff coverage
   id: covguard
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
 
@@ -139,7 +139,7 @@ jobs:
   run: cargo llvm-cov --lcov --output-path lcov.info
 
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
     coverage-format: lcov  # Optional, auto-detected from .info extension
@@ -152,7 +152,7 @@ jobs:
   run: mvn test jacoco:report
 
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: target/site/jacoco/jacoco.xml
     coverage-format: jacoco
@@ -165,7 +165,7 @@ jobs:
   run: pytest --cov=src --cov-report=json:coverage.json
 
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: coverage.json
     coverage-format: coverage-py
@@ -184,7 +184,7 @@ Deletes the comment when coverage passes — keeps PRs clean when everything is 
 
 ```yaml
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
     comment-pr: true
@@ -208,7 +208,7 @@ For GitHub Code Scanning integration:
 
 ```yaml
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
     sarif-output: true
@@ -246,7 +246,7 @@ Then reference it in your workflow:
 
 ```yaml
 - name: Check diff coverage
-  uses: covguard/covguard@v1
+  uses: EffortlessMetrics/covguard@v1
   with:
     coverage-file: lcov.info
     config-file: covguard.toml
@@ -314,7 +314,7 @@ jobs:
 
       - name: Check diff coverage
         id: covguard
-        uses: covguard/covguard@v1
+        uses: EffortlessMetrics/covguard@v1
         with:
           coverage-file: lcov.info
           fail-threshold: 80
@@ -369,13 +369,13 @@ covguard needs full git history to compute accurate diffs. Make sure your checko
 We recommend pinning to a specific version for production use:
 
 ```yaml
-uses: covguard/covguard@v1.0.0  # Pin to exact version
+uses: EffortlessMetrics/covguard@v1.0.0  # Pin to exact version
 ```
 
 Or use the major version tag for automatic minor/patch updates:
 
 ```yaml
-uses: covguard/covguard@v1  # Gets latest v1.x.x
+uses: EffortlessMetrics/covguard@v1  # Gets latest v1.x.x
 ```
 
 ## License
@@ -384,6 +384,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- 📖 [Documentation](https://github.com/covguard/covguard#readme)
-- 🐛 [Issue Tracker](https://github.com/covguard/covguard/issues)
-- 💬 [Discussions](https://github.com/covguard/covguard/discussions)
+- 📖 [Documentation](https://github.com/EffortlessMetrics/covguard#readme)
+- 🐛 [Issue Tracker](https://github.com/EffortlessMetrics/covguard/issues)
+- 💬 [Discussions](https://github.com/EffortlessMetrics/covguard/discussions)

@@ -5,42 +5,36 @@
 #
 # Usage:
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/your-org/covguard/main/templates/gitlab/covguard-base.yml'
-#   
+#     - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
+#
 #   variables:
 #     COVERAGE_FILE: "coverage/lcov.info"
-#     FAIL_THRESHOLD: "80"
+#     THRESHOLD: "80"
 #
 #   covguard:
 #     extends: .covguard_base
 
 # Configuration Variables
 # -----------------------
-# COVGUARD_VERSION      - Version of covguard to use (default: latest)
-# COVERAGE_FILE         - Path to the coverage report file (required)
-# COVERAGE_FORMAT       - Format: lcov, jacoco, coverage-py (default: lcov)
-# FAIL_THRESHOLD        - Minimum coverage % to pass (default: 0)
-# WARN_THRESHOLD        - Minimum coverage % to warn (default: 0)
+# COVERAGE_FILE         - Path to the LCOV coverage report file (required)
+# THRESHOLD             - Minimum coverage % to pass (optional)
+# SCOPE                 - Line scope: added or touched (default: added)
+# PROFILE               - Config profile: oss, moderate, team, strict, lenient
 # POST_MR_COMMENT       - Post MR comment with results (default: "true")
-# FAIL_ON_UNCOVERED     - Fail if uncovered lines found (default: "true")
 # BASE_REF              - Base ref for diff (default: $CI_MERGE_REQUEST_DIFF_BASE_SHA)
 # HEAD_REF              - Head ref for diff (default: $CI_COMMIT_SHA)
-# COVGUARD_IMAGE        - Docker image to use (default: ghcr.io/your-org/covguard)
 
 variables:
-  COVGUARD_VERSION: "latest"
-  COVERAGE_FORMAT: "lcov"
-  FAIL_THRESHOLD: "0"
-  WARN_THRESHOLD: "0"
+  THRESHOLD: ""
+  SCOPE: ""
+  PROFILE: ""
   POST_MR_COMMENT: "true"
-  FAIL_ON_UNCOVERED: "true"
-  COVGUARD_IMAGE: "ghcr.io/covguard/covguard"
 
 # Base job definition
 # -------------------
 .covguard_base:
   stage: test
-  image: "${COVGUARD_IMAGE}:${COVGUARD_VERSION}"
+  image: rust:latest
   allow_failure: false
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -54,7 +48,10 @@ variables:
         echo "Error: COVERAGE_FILE variable is required"
         exit 1
       fi
-      
+
+      # Install covguard
+      cargo install covguard-cli --locked
+
       # Set default refs for merge requests
       if [ -z "$BASE_REF" ]; then
         export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
@@ -62,14 +59,11 @@ variables:
       if [ -z "$HEAD_REF" ]; then
         export HEAD_REF="${CI_COMMIT_SHA}"
       fi
-      
+
       echo "covguard configuration:"
       echo "  Coverage file: ${COVERAGE_FILE}"
-      echo "  Coverage format: ${COVERAGE_FORMAT}"
       echo "  Base ref: ${BASE_REF}"
       echo "  Head ref: ${HEAD_REF}"
-      echo "  Fail threshold: ${FAIL_THRESHOLD}%"
-      echo "  Warn threshold: ${WARN_THRESHOLD}%"
   script:
     - |
       # Build covguard arguments
@@ -78,31 +72,25 @@ variables:
       COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --lcov ${COVERAGE_FILE}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
-      
-      # Add optional arguments
-      if [ -n "$FAIL_THRESHOLD" ] && [ "$FAIL_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --fail-threshold ${FAIL_THRESHOLD}"
+
+      # Add optional arguments (only flags the CLI actually supports)
+      if [ -n "$THRESHOLD" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
       fi
-      
-      if [ -n "$WARN_THRESHOLD" ] && [ "$WARN_THRESHOLD" != "0" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --warn-threshold ${WARN_THRESHOLD}"
+
+      if [ -n "$SCOPE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
       fi
-      
-      if [ "${FAIL_ON_UNCOVERED}" = "false" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --no-fail-on-uncovered"
+
+      if [ -n "$PROFILE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
       fi
-      
-      if [ "${COVERAGE_FORMAT}" = "jacoco" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --format jacoco"
-      elif [ "${COVERAGE_FORMAT}" = "coverage-py" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --format coverage-py"
-      fi
-      
+
       # Generate markdown output for MR comments
       if [ "${POST_MR_COMMENT}" = "true" ]; then
         COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
       fi
-      
+
       echo "Running: covguard ${COVGUARD_ARGS}"
       covguard $COVGUARD_ARGS
   after_script:
@@ -110,9 +98,9 @@ variables:
       # Post MR comment if enabled and we're in an MR
       if [ "${POST_MR_COMMENT}" = "true" ] && [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f "${CI_PROJECT_DIR}/covguard-comment.md" ]; then
         echo "Posting merge request comment..."
-        
+
         COMMENT_BODY=$(cat "${CI_PROJECT_DIR}/covguard-comment.md" | jq -Rs .)
-        
+
         curl -s -X POST \
           -H "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
           -H "Content-Type: application/json" \
@@ -124,8 +112,6 @@ variables:
     paths:
       - covguard-report.json
       - covguard-comment.md
-    reports:
-      codequality: covguard-report.json
     expire_in: 1 week
 
 # Job for MR coverage check (extends base)

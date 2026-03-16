@@ -166,16 +166,20 @@ pub fn parse_coverage_py_with_strip(
     let mut coverage_map: CoverageMap = BTreeMap::new();
 
     for (path, file_coverage) in report.files {
-        if file_coverage.executed_lines.is_empty() {
-            continue;
-        }
-
         let normalized_path = normalize_path_with_strip(&path, strip_prefixes);
         let line_coverage: BTreeMap<u32, u32> = file_coverage
             .executed_lines
             .into_iter()
             .map(|line| (line, 1)) // coverage.py doesn't track hit counts, use 1
             .collect();
+
+        // Always insert the file into the coverage map, even if it has no
+        // executed lines. This lets the domain layer distinguish "file is
+        // present in coverage data with 0% coverage" from "file has no
+        // coverage data at all" (missing).
+        coverage_map
+            .entry(normalized_path.clone())
+            .or_default();
 
         merge_file_coverage(&mut coverage_map, &normalized_path, &line_coverage);
     }
@@ -354,8 +358,10 @@ mod tests {
         }"#;
 
         let coverage = parse_coverage_py(json).unwrap();
-        // Files with no executed lines should not appear in coverage map
-        assert!(!coverage.contains_key("src/empty.py"));
+        // Files with no executed lines should still appear in coverage map
+        // (with an empty line map) so domain can distinguish "uncovered" from "missing"
+        assert!(coverage.contains_key("src/empty.py"));
+        assert!(coverage.get("src/empty.py").unwrap().is_empty());
     }
 
     #[test]

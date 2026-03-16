@@ -109,7 +109,7 @@ fn bench_sarif_rendering(c: &mut Criterion) {
                                 "driver": {
                                     "name": "covguard",
                                     "version": "0.1.0",
-                                    "informationUri": "https://github.com/effortlessmetrics/cov-guard"
+                                    "informationUri": "https://github.com/EffortlessMetrics/covguard"
                                 }
                             },
                             "results": results
