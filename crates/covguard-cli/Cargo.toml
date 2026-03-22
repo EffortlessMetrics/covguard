@@ -24,7 +24,7 @@ covguard-output-features.workspace = true
 covguard-adapters-artifacts.workspace = true
 covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.1.0" }
 covguard-adapters-repo = { path = "../covguard-adapters-repo", version = "0.1.0" }
-clap = { version = "4.5.60", features = ["derive"] }
+clap = { version = "4.6.0", features = ["derive"] }
 chrono.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
