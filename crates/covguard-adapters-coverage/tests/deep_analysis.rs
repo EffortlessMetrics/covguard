@@ -137,9 +137,9 @@ fn test_lcov_with_only_whitespace() {
 
 #[test]
 fn test_lcov_with_only_comments_or_tn() {
-    // TN: without any SF should result in empty coverage
-    let coverage = parse_lcov("TN:test_name\n").unwrap();
-    assert!(coverage.is_empty());
+    // TN: without any SF should result in empty coverage error since no valid DA records exist
+    let err = parse_lcov("TN:test_name\n").unwrap_err();
+    assert_eq!(err, covguard_adapters_coverage::LcovError::EmptyFile);
 }
 
 #[test]

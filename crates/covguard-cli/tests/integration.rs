@@ -1471,7 +1471,9 @@ fn test_error_missing_lcov_shows_enhanced_format() {
         ])
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("Error [covguard.input.invalid_lcov]"))
+        .stderr(predicate::str::contains(
+            "Error [covguard.input.invalid_lcov]",
+        ))
         .stderr(predicate::str::contains("Hint:"))
         .stderr(predicate::str::contains("See:"));
 }
@@ -1491,7 +1493,9 @@ fn test_error_missing_diff_shows_enhanced_format() {
         ])
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("Error [covguard.input.invalid_diff]"))
+        .stderr(predicate::str::contains(
+            "Error [covguard.input.invalid_diff]",
+        ))
         .stderr(predicate::str::contains("Hint:"))
         .stderr(predicate::str::contains("See:"));
 }

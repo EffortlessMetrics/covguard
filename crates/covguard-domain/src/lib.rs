@@ -1025,11 +1025,10 @@ mod tests {
             "Should have findings for uncovered line"
         );
         // Verify the finding has the correct path if location exists
-        if let Some(finding) = output.findings.first() {
-            if let Some(loc) = &finding.location {
+        if let Some(finding) = output.findings.first()
+            && let Some(loc) = &finding.location {
                 assert_eq!(loc.path, unicode_path);
             }
-        }
     }
 
     #[test]

@@ -3,9 +3,7 @@
 # This template provides a complete setup for running covguard
 # with Java projects using JaCoCo for coverage generation.
 #
-# NOTE: covguard currently only supports LCOV format. This template
-# generates JaCoCo coverage and converts it to LCOV for covguard.
-# Native JaCoCo XML support is planned for a future release.
+# Native JaCoCo XML support is used via the --jacoco flag.
 #
 # Usage:
 #   include:
@@ -55,7 +53,7 @@ variables:
       - .m2/repository/
   before_script:
     - |
-      # Install covguard and dependencies
+      # Install dependencies
       apt-get update && apt-get install -y curl jq
 
       # Install Rust toolchain and covguard
@@ -95,28 +93,11 @@ variables:
         exit 1
       fi
 
-      # Convert JaCoCo XML to LCOV format
-      # NOTE: This requires a JaCoCo-to-LCOV converter.
-      # Option 1: Use jacoco2lcov or similar tool
-      # Option 2: Configure JaCoCo to output LCOV directly
-      # For now, this template assumes LCOV output is available.
-      echo "WARNING: covguard currently only supports LCOV format."
-      echo "Please configure your build to generate LCOV output,"
-      echo "or use a JaCoCo-to-LCOV converter."
-      echo "Native JaCoCo XML support is planned for a future release."
-
-      # If you have an LCOV file, use it directly:
-      LCOV_FILE="${CI_PROJECT_DIR}/lcov.info"
-      if [ ! -f "$LCOV_FILE" ]; then
-        echo "Error: No LCOV file found. Please generate LCOV output from your coverage tool."
-        exit 1
-      fi
-
       # Build covguard arguments
       COVGUARD_ARGS="check"
       COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov ${LCOV_FILE}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --jacoco ${JACOCO_REPORT_PATH}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
 
       # Add optional arguments

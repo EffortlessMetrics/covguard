@@ -2,8 +2,7 @@
 //!
 //! Run with: cargo bench --bench diff_parsing
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box as bb;
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 /// Generate a synthetic diff with the specified number of files and lines per file.
 fn generate_synthetic_diff(num_files: usize, lines_per_file: usize) -> String {
@@ -54,10 +53,10 @@ fn bench_diff_parsing(c: &mut Criterion) {
 
     // Test different sizes
     for (num_files, lines_per_file) in [
-        (10, 50),    // Small: 10 files, 50 lines each
-        (50, 100),   // Medium: 50 files, 100 lines each
-        (100, 200),  // Large: 100 files, 200 lines each
-        (500, 100),  // Many files: 500 files, 100 lines each
+        (10, 50),   // Small: 10 files, 50 lines each
+        (50, 100),  // Medium: 50 files, 100 lines each
+        (100, 200), // Large: 100 files, 200 lines each
+        (500, 100), // Many files: 500 files, 100 lines each
     ] {
         let diff = generate_synthetic_diff(num_files, lines_per_file);
         let size_kb = diff.len() / 1024;
@@ -65,7 +64,7 @@ fn bench_diff_parsing(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(diff.len() as u64));
         group.bench_with_input(
             BenchmarkId::new(
-                &format!("{}files_{}lines", num_files, lines_per_file),
+                format!("{}files_{}lines", num_files, lines_per_file),
                 format!("{}KB", size_kb),
             ),
             &diff,
@@ -101,10 +100,7 @@ fn bench_diff_line_iteration(c: &mut Criterion) {
 
     group.bench_function("filter_hunk_headers", |b| {
         b.iter(|| {
-            let hunks: Vec<_> = large_diff
-                .lines()
-                .filter(|l| l.starts_with("@@"))
-                .collect();
+            let hunks: Vec<_> = large_diff.lines().filter(|l| l.starts_with("@@")).collect();
             black_box(hunks)
         });
     });

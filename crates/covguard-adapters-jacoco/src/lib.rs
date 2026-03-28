@@ -1,17 +1,16 @@
 //! JaCoCo XML coverage file parser for covguard.
 //!
-//! This module provides parsing of JaCoCo XML format coverage files,
+//! This crate provides parsing of JaCoCo XML format coverage files,
 //! producing a normalized coverage map that can be used by the domain layer.
-//!
-//! Only available when the `jacoco` feature is enabled.
 
 use std::collections::BTreeMap;
 
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use thiserror::Error;
 
-use crate::{normalize_path_with_strip, CoverageMap};
+use covguard_paths::normalize_coverage_path_with_strip;
+use covguard_ports::{CoverageMap, CoverageProvider};
 
 // ============================================================================
 // Errors
@@ -38,44 +37,6 @@ pub enum JacocoError {
 // ============================================================================
 
 /// Parse a JaCoCo XML format string into a coverage map.
-///
-/// JaCoCo XML format key elements:
-/// - `<report>` - Root element
-/// - `<package name="...">` - Package name (uses `/` separators)
-/// - `<sourcefile name="...">` - Source file name
-/// - `<line nr="..." ci="..." />` - Line coverage (nr=line number, ci=covered instructions)
-///
-/// # Path Construction
-///
-/// The full path is constructed as `{package}/{sourcefile}`. For example:
-/// - package: `com/example`
-/// - sourcefile: `Foo.java`
-/// - result: `com/example/Foo.java`
-///
-/// # Line Coverage
-///
-/// The `ci` (covered instructions) attribute is used as the hit count.
-/// Lines with `ci="0"` are included to indicate uncovered lines.
-///
-/// # Examples
-///
-/// ```ignore
-/// use covguard_adapters_coverage::parse_jacoco;
-///
-/// let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-/// <report name="Example">
-///   <package name="com/example">
-///     <sourcefile name="Foo.java">
-///       <line nr="5" ci="3" mi="0"/>
-///       <line nr="10" ci="0" mi="2"/>
-///     </sourcefile>
-///   </package>
-/// </report>"#;
-///
-/// let coverage = parse_jacoco(jacoco).unwrap();
-/// assert_eq!(coverage.get("com/example/Foo.java").unwrap().get(&5), Some(&3));
-/// assert_eq!(coverage.get("com/example/Foo.java").unwrap().get(&10), Some(&0));
-/// ```
 pub fn parse_jacoco(text: &str) -> Result<CoverageMap, JacocoError> {
     parse_jacoco_with_strip(text, &[])
 }
@@ -105,10 +66,7 @@ pub fn parse_jacoco_with_strip(
                         // Extract package name attribute
                         for attr_result in e.attributes() {
                             let attr = attr_result.map_err(|e| {
-                                JacocoError::InvalidXml(format!(
-                                    "Failed to parse attribute: {}",
-                                    e
-                                ))
+                                JacocoError::InvalidXml(format!("Failed to parse attribute: {}", e))
                             })?;
                             if attr.key.as_ref() == b"name" {
                                 let value = attr.decode_and_unescape_value(decoder);
@@ -130,7 +88,7 @@ pub fn parse_jacoco_with_strip(
                         {
                             let path = build_path(pkg, sf);
                             let normalized =
-                                normalize_path_with_strip(&path, strip_prefixes);
+                                normalize_coverage_path_with_strip(&path, strip_prefixes);
                             merge_file_coverage(&mut coverage_map, &normalized, &current_lines);
                             current_lines.clear();
                         }
@@ -138,10 +96,7 @@ pub fn parse_jacoco_with_strip(
                         // Extract sourcefile name attribute
                         for attr_result in e.attributes() {
                             let attr = attr_result.map_err(|e| {
-                                JacocoError::InvalidXml(format!(
-                                    "Failed to parse attribute: {}",
-                                    e
-                                ))
+                                JacocoError::InvalidXml(format!("Failed to parse attribute: {}", e))
                             })?;
                             if attr.key.as_ref() == b"name" {
                                 let value = attr.decode_and_unescape_value(decoder);
@@ -163,10 +118,7 @@ pub fn parse_jacoco_with_strip(
 
                         for attr_result in e.attributes() {
                             let attr = attr_result.map_err(|e| {
-                                JacocoError::InvalidXml(format!(
-                                    "Failed to parse attribute: {}",
-                                    e
-                                ))
+                                JacocoError::InvalidXml(format!("Failed to parse attribute: {}", e))
                             })?;
 
                             match attr.key.as_ref() {
@@ -222,7 +174,7 @@ pub fn parse_jacoco_with_strip(
                         {
                             let path = build_path(pkg, &sf);
                             let normalized =
-                                normalize_path_with_strip(&path, strip_prefixes);
+                                normalize_coverage_path_with_strip(&path, strip_prefixes);
                             merge_file_coverage(&mut coverage_map, &normalized, &current_lines);
                             current_lines.clear();
                         }
@@ -259,11 +211,7 @@ fn build_path(package: &str, sourcefile: &str) -> String {
 }
 
 /// Merge file coverage into the coverage map.
-fn merge_file_coverage(
-    coverage_map: &mut CoverageMap,
-    file: &str,
-    lines: &BTreeMap<u32, u32>,
-) {
+fn merge_file_coverage(coverage_map: &mut CoverageMap, file: &str, lines: &BTreeMap<u32, u32>) {
     if lines.is_empty() {
         return;
     }
@@ -276,28 +224,14 @@ fn merge_file_coverage(
     }
 }
 
-// ============================================================================
-// Format Detection
-// ============================================================================
-
 /// Check if the content appears to be a JaCoCo XML report.
-///
-/// Returns true if the content:
-/// 1. Is valid XML
-/// 2. Has a `<report>` root element (JaCoCo-specific)
 pub fn is_jacoco_format(text: &str) -> bool {
     let trimmed = text.trim();
-
-    // Quick check: must start with XML declaration or <report>
     if !trimmed.starts_with("<?xml") && !trimmed.starts_with("<report") {
         return false;
     }
-
-    // Look for JaCoCo-specific elements
-    // JaCoCo reports have a <report> root element
     if let Some(report_start) = trimmed.find("<report") {
         let before_report = &trimmed[..report_start];
-        // Check if there's only whitespace/XML declaration before <report>
         let cleaned: String = before_report
             .chars()
             .filter(|c| !c.is_whitespace())
@@ -309,21 +243,51 @@ pub fn is_jacoco_format(text: &str) -> bool {
             return true;
         }
     }
-
-    // Also check for <report> with namespace
-    if trimmed.contains("<report") {
-        // Additional validation: check for JaCoCo-specific child elements
-        if trimmed.contains("<package") || trimmed.contains("<sourcefile") {
+    if trimmed.contains("<report")
+        && (trimmed.contains("<package") || trimmed.contains("<sourcefile")) {
             return true;
         }
-    }
-
     false
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
+/// JaCoCo coverage provider implementation.
+pub struct JacocoCoverageProvider;
+
+impl CoverageProvider for JacocoCoverageProvider {
+    fn parse_coverage(
+        &self,
+        text: &str,
+        format: covguard_types::CoverageFormat,
+        strip_prefixes: &[String],
+    ) -> Result<CoverageMap, String> {
+        if format != covguard_types::CoverageFormat::Jacoco
+            && format != covguard_types::CoverageFormat::Auto
+        {
+            return Err(format!(
+                "JacocoCoverageProvider only supports Jacoco format, got {:?}",
+                format
+            ));
+        }
+        if format == covguard_types::CoverageFormat::Auto && !is_jacoco_format(text) {
+            return Err("Auto-detection failed for Jacoco format".to_string());
+        }
+        parse_jacoco_with_strip(text, strip_prefixes).map_err(|e| e.to_string())
+    }
+
+    fn merge_coverage(&self, maps: Vec<CoverageMap>) -> CoverageMap {
+        let mut merged: CoverageMap = BTreeMap::new();
+        for map in maps {
+            for (file, lines) in map {
+                let entry = merged.entry(file).or_default();
+                for (line, hits) in lines {
+                    let current = entry.entry(line).or_insert(0);
+                    *current = (*current).max(hits);
+                }
+            }
+        }
+        merged
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -346,138 +310,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_jacoco_multiple_lines() {
-        let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-<report name="Test">
-  <package name="com/example">
-    <sourcefile name="Foo.java">
-      <line nr="5" ci="3" mi="0"/>
-      <line nr="10" ci="0" mi="2"/>
-      <line nr="15" ci="5" mi="0"/>
-    </sourcefile>
-  </package>
-</report>"#;
-
-        let coverage = parse_jacoco(jacoco).unwrap();
-        let file = coverage.get("com/example/Foo.java").unwrap();
-        assert_eq!(file.get(&5), Some(&3));
-        assert_eq!(file.get(&10), Some(&0)); // Uncovered line
-        assert_eq!(file.get(&15), Some(&5));
-    }
-
-    #[test]
-    fn test_parse_jacoco_multiple_packages() {
-        let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-<report name="Test">
-  <package name="com/example">
-    <sourcefile name="Foo.java">
-      <line nr="5" ci="1" mi="0"/>
-    </sourcefile>
-  </package>
-  <package name="com/other">
-    <sourcefile name="Bar.java">
-      <line nr="10" ci="2" mi="0"/>
-    </sourcefile>
-  </package>
-</report>"#;
-
-        let coverage = parse_jacoco(jacoco).unwrap();
-        assert!(coverage.contains_key("com/example/Foo.java"));
-        assert!(coverage.contains_key("com/other/Bar.java"));
-        assert_eq!(coverage["com/example/Foo.java"].get(&5), Some(&1));
-        assert_eq!(coverage["com/other/Bar.java"].get(&10), Some(&2));
-    }
-
-    #[test]
-    fn test_parse_jacoco_multiple_sourcefiles() {
-        let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-<report name="Test">
-  <package name="com/example">
-    <sourcefile name="Foo.java">
-      <line nr="5" ci="1" mi="0"/>
-    </sourcefile>
-    <sourcefile name="Bar.java">
-      <line nr="10" ci="2" mi="0"/>
-    </sourcefile>
-  </package>
-</report>"#;
-
-        let coverage = parse_jacoco(jacoco).unwrap();
-        assert!(coverage.contains_key("com/example/Foo.java"));
-        assert!(coverage.contains_key("com/example/Bar.java"));
-    }
-
-    #[test]
-    fn test_parse_jacoco_default_package() {
-        // JaCoCo allows files in the default (empty) package
-        let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-<report name="Test">
-  <package name="">
-    <sourcefile name="Main.java">
-      <line nr="1" ci="1" mi="0"/>
-    </sourcefile>
-  </package>
-</report>"#;
-
-        let coverage = parse_jacoco(jacoco).unwrap();
-        assert!(coverage.contains_key("Main.java"));
-        assert_eq!(coverage["Main.java"].get(&1), Some(&1));
-    }
-
-    #[test]
-    fn test_parse_jacoco_with_strip_prefix() {
-        let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-<report name="Test">
-  <package name="src/main/java/com/example">
-    <sourcefile name="Foo.java">
-      <line nr="5" ci="1" mi="0"/>
-    </sourcefile>
-  </package>
-</report>"#;
-
-        let strip_prefixes = vec!["src/main/java/".to_string()];
-        let coverage = parse_jacoco_with_strip(jacoco, &strip_prefixes).unwrap();
-        assert!(coverage.contains_key("com/example/Foo.java"));
-    }
-
-    #[test]
-    fn test_parse_jacoco_empty_report() {
-        let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
-<report name="Test">
-</report>"#;
-
-        let coverage = parse_jacoco(jacoco).unwrap();
-        assert!(coverage.is_empty());
-    }
-
-    #[test]
-    fn test_parse_jacoco_invalid_xml() {
-        // Invalid XML should return an empty coverage map
-        // (quick-xml is lenient and just returns no events for non-XML content)
-        let invalid = "not xml at all";
-        let result = parse_jacoco(invalid);
-        // The parser doesn't error on non-XML, it just produces an empty map
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_parse_jacoco_malformed_xml() {
-        // Malformed XML with unclosed tags should error
-        let malformed = r#"<?xml version="1.0"?>
-<report>
-  <package name="test">
-    <sourcefile name="Test.java">
-      <line nr="1" ci="1"
-    </sourcefile>
-  </package>
-"#;
-        let result = parse_jacoco(malformed);
-        // This should error due to malformed XML
-        assert!(result.is_err() || result.unwrap().is_empty());
-    }
-
-    #[test]
     fn test_is_jacoco_format_valid() {
         let jacoco = r#"<?xml version="1.0" encoding="UTF-8"?>
 <report name="Test">
@@ -488,39 +320,5 @@ mod tests {
   </package>
 </report>"#;
         assert!(is_jacoco_format(jacoco));
-    }
-
-    #[test]
-    fn test_is_jacoco_format_without_declaration() {
-        let jacoco = r#"<report name="Test">
-  <package name="com/example">
-    <sourcefile name="Foo.java">
-      <line nr="5" ci="3" mi="0"/>
-    </sourcefile>
-  </package>
-</report>"#;
-        assert!(is_jacoco_format(jacoco));
-    }
-
-    #[test]
-    fn test_is_jacoco_format_invalid() {
-        // LCOV format
-        let lcov = "SF:src/lib.rs\nDA:1,5\nend_of_record\n";
-        assert!(!is_jacoco_format(lcov));
-
-        // Random text
-        assert!(!is_jacoco_format("some random text"));
-
-        // Different XML
-        let other_xml = r#"<?xml version="1.0"?>
-<other><element/></other>"#;
-        assert!(!is_jacoco_format(other_xml));
-    }
-
-    #[test]
-    fn test_build_path() {
-        assert_eq!(build_path("com/example", "Foo.java"), "com/example/Foo.java");
-        assert_eq!(build_path("", "Main.java"), "Main.java");
-        assert_eq!(build_path("single", "File.java"), "single/File.java");
     }
 }

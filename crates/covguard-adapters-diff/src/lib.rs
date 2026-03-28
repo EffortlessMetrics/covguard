@@ -145,13 +145,11 @@ impl covguard_types::EnhancedError for DiffError {
 
     fn remediation(&self) -> &str {
         match self {
-            Self::InvalidFormat { suggestion, .. } => {
-                suggestion.as_deref().unwrap_or(
-                    "Ensure the diff is in unified diff format.\n\
+            Self::InvalidFormat { suggestion, .. } => suggestion.as_deref().unwrap_or(
+                "Ensure the diff is in unified diff format.\n\
                      Try using 'git diff' to generate the diff, or use --base/--head\n\
-                     to let covguard fetch the diff directly from git."
-                )
-            }
+                     to let covguard fetch the diff directly from git.",
+            ),
             Self::MissingHunkHeader { .. } => {
                 "Hunks must start with '@@ -<start>,<count> +<start>,<count> @@'.\n\
                  Ensure the diff was generated correctly with 'git diff' or\n\
@@ -208,7 +206,9 @@ impl covguard_types::EnhancedError for DiffError {
             Self::MissingHunkHeader { line_number } => format!("at line {}", line_number),
             Self::InvalidHunkHeader { line_number, .. } => format!("at line {}", line_number),
             Self::IoError { path: Some(p), .. } => format!("file: {}", p),
-            Self::GitError { command: Some(c), .. } => format!("command: {}", c),
+            Self::GitError {
+                command: Some(c), ..
+            } => format!("command: {}", c),
             Self::BinaryFile { path } => format!("file: {}", path),
             _ => String::new(),
         };
@@ -267,7 +267,10 @@ pub fn load_diff_from_git(base: &str, head: &str, repo_root: &Path) -> Result<St
         .current_dir(repo_root)
         .args(["diff", base, head])
         .output()
-        .map_err(|e| DiffError::IoError { message: e.to_string(), path: None })?;
+        .map_err(|e| DiffError::IoError {
+            message: e.to_string(),
+            path: None,
+        })?;
     // Preserve prior CLI behavior: if git exits non-zero, still return stdout.
     // The caller can then treat empty output as "no changed lines".
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -373,7 +376,7 @@ pub fn parse_patch_with_meta(text: &str) -> Result<DiffParseResult, DiffError> {
 
     for (line_idx, line) in lines.iter().enumerate() {
         let line_num = line_idx + 1; // 1-indexed
-        
+
         // Track diff header for fallback file identity
         if let Some(rest) = line.strip_prefix("diff --git ") {
             let mut parts = rest.split_whitespace();

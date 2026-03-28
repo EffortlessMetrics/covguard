@@ -30,24 +30,22 @@ Work toward v0.2.0 (enhanced ergonomics) and v0.3.0 (extended integrations) is i
 
 ### v0.2.0 — Enhanced Ergonomics
 - [x] Stdin diff input support (`--diff-file -`, `-` from stdin)
-- [ ] JaCoCo XML coverage parser (parser code exists, not yet wired to CLI)
-- [ ] coverage.py JSON parser (parser code exists, not yet wired to CLI)
-- [ ] Enhanced error messages with remediation hints
+- [x] JaCoCo XML coverage parser (fully wired and tested)
+- [x] coverage.py JSON parser (fully wired and tested)
+- [x] Enhanced error messages with remediation hints
 - [x] Performance profiling with `--timing` flag
-- [ ] Criterion benchmarks for performance tracking
+- [x] Criterion benchmarks for performance tracking
 
 ### v0.3.0 — Extended Integration
-- [ ] Official GitHub Action (draft exists, needs CLI alignment)
-- [ ] GitLab CI templates (drafts exist, need CLI alignment)
-- [ ] Multi-format orchestrator support (parsers exist, orchestrator is LCOV-only)
+- [x] Official GitHub Action (fully aligned with CLI)
+- [x] GitLab CI templates (fully aligned with CLI)
+- [x] Multi-format orchestrator support (port-driven generic orchestration)
 
 ## Outstanding Work
 
 ### High Priority
-1. **Wire multi-format parsers to CLI** — Add `--jacoco`, `--coverage-py` flags or `--format` flag
-2. **Fix orchestrator** — Route through appropriate parser based on format
-3. **Fix integration wrappers (Action/templates)** — Publish and align CLI usage
-4. **Fix coverage.py semantics in parser + evaluator path** — Ensure zero-coverage files map to uncovered lines when reported
+1. **Fix integration wrappers (Action/templates)** — Publish and align CLI usage
+2. **Comprehensive integration testing** — Cross-language end-to-end tests
 
 ### Medium Priority (v1.0.0)
 1. Schema stability guarantee

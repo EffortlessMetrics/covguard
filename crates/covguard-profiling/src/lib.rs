@@ -27,8 +27,8 @@
 //! ```
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// Global flag indicating whether profiling is enabled.
@@ -109,7 +109,10 @@ impl ProfileStats {
         }
 
         let mut timings = self.timings.lock().unwrap();
-        timings.entry(name.to_string()).or_default().record(duration);
+        timings
+            .entry(name.to_string())
+            .or_default()
+            .record(duration);
     }
 
     /// Get all recorded timings.
@@ -264,7 +267,9 @@ pub mod memory {
         }
 
         // Outer BTreeMap overhead
-        total += std::mem::size_of::<std::collections::BTreeMap<String, std::collections::BTreeMap<u32, u32>>>();
+        total += std::mem::size_of::<
+            std::collections::BTreeMap<String, std::collections::BTreeMap<u32, u32>>,
+        >();
 
         total
     }
@@ -283,7 +288,9 @@ pub mod memory {
         }
 
         // Outer BTreeMap overhead
-        total += std::mem::size_of::<std::collections::BTreeMap<String, Vec<std::ops::RangeInclusive<u32>>>>();
+        total += std::mem::size_of::<
+            std::collections::BTreeMap<String, Vec<std::ops::RangeInclusive<u32>>>,
+        >();
 
         total
     }
@@ -406,20 +413,12 @@ impl ProfileResult {
         for (name, info) in &self.timings {
             output.push_str(&format!(
                 "{:<30} {:>8} {:>12.2}ms {:>12.2}ms {:>12.2}ms {:>12.2}ms\n",
-                name,
-                info.call_count,
-                info.total_ms,
-                info.avg_ms,
-                info.min_ms,
-                info.max_ms
+                name, info.call_count, info.total_ms, info.avg_ms, info.min_ms, info.max_ms
             ));
         }
 
         output.push_str(&format!("{}\n", "-".repeat(90)));
-        output.push_str(&format!(
-            "Total time: {:.2}ms\n",
-            self.total_duration_ms
-        ));
+        output.push_str(&format!("Total time: {:.2}ms\n", self.total_duration_ms));
         output.push_str(&format!(
             "Memory: coverage={} ranges={} total={}\n",
             memory::format_bytes(self.memory.coverage_map_bytes),

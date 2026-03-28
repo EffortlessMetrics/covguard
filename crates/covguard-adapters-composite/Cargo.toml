@@ -1,0 +1,20 @@
+[package]
+name = "covguard-adapters-composite"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+covguard-ports = { workspace = true }
+covguard-types = { workspace = true }
+covguard-adapters-coverage = { workspace = true }
+covguard-adapters-jacoco = { workspace = true }
+covguard-adapters-coverage-py = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

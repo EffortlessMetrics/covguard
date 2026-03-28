@@ -8,8 +8,25 @@ branding:
 
 inputs:
   lcov-file:
-    description: 'Path to the LCOV coverage report file'
-    required: true
+    description: 'Path to the LCOV coverage report file (repeatable)'
+    required: false
+    default: ''
+  jacoco-file:
+    description: 'Path to the JaCoCo XML coverage report file (repeatable)'
+    required: false
+    default: ''
+  coverage-py-file:
+    description: 'Path to the coverage.py JSON report file (repeatable)'
+    required: false
+    default: ''
+  coverage-file:
+    description: 'Path to any supported coverage report file (auto-detect)'
+    required: false
+    default: ''
+  sensor-schema:
+    description: 'Emit sensor.report.v1 schema with capabilities block'
+    required: false
+    default: 'false'
   diff-base:
     description: 'Base ref for diff comparison (e.g., origin/main).'
     required: false
@@ -113,6 +130,10 @@ runs:
       shell: bash
       env:
         INPUT_LCOV_FILE: ${{ inputs.lcov-file }}
+        INPUT_JACOCO_FILE: ${{ inputs.jacoco-file }}
+        INPUT_COVERAGE_PY_FILE: ${{ inputs.coverage-py-file }}
+        INPUT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        INPUT_SENSOR_SCHEMA: ${{ inputs.sensor-schema }}
         INPUT_DIFF_BASE: ${{ inputs.diff-base }}
         INPUT_DIFF_HEAD: ${{ inputs.diff-head }}
         INPUT_DIFF_FILE: ${{ inputs.diff-file }}
@@ -132,8 +153,35 @@ runs:
         # Build the covguard command
         COVGUARD_ARGS=("check")
 
-        # Coverage file
-        COVGUARD_ARGS+=("--lcov" "$INPUT_LCOV_FILE")
+        # Coverage files
+        if [ -n "$INPUT_LCOV_FILE" ]; then
+          for file in $INPUT_LCOV_FILE; do
+            COVGUARD_ARGS+=("--lcov" "$file")
+          done
+        fi
+
+        if [ -n "$INPUT_JACOCO_FILE" ]; then
+          for file in $INPUT_JACOCO_FILE; do
+            COVGUARD_ARGS+=("--jacoco" "$file")
+          done
+        fi
+
+        if [ -n "$INPUT_COVERAGE_PY_FILE" ]; then
+          for file in $INPUT_COVERAGE_PY_FILE; do
+            COVGUARD_ARGS+=("--coverage-py" "$file")
+          done
+        fi
+
+        if [ -n "$INPUT_COVERAGE_FILE" ]; then
+          for file in $INPUT_COVERAGE_FILE; do
+            COVGUARD_ARGS+=("--coverage" "$file")
+          done
+        fi
+
+        # Sensor schema
+        if [ "$INPUT_SENSOR_SCHEMA" = "true" ]; then
+          COVGUARD_ARGS+=("--sensor-schema")
+        fi
 
         # Diff options
         if [ -n "$INPUT_DIFF_FILE" ]; then
@@ -142,7 +190,7 @@ runs:
           DIFF_BASE="$INPUT_DIFF_BASE"
           DIFF_HEAD="$INPUT_DIFF_HEAD"
 
-          if [ -z "$DIFF_BASE" ] || [ -z "$DIFF_HEAD" ]; then
+          if [ -z "$DIFF_BASE" ] || [ -z "$HEAD_REF" ]; then
             if [ -f "$GITHUB_EVENT_PATH" ]; then
               EVENT_BASE=$(jq -r '.pull_request.base.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
               EVENT_HEAD=$(jq -r '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)

@@ -3,7 +3,7 @@
 # This template provides a complete setup for running covguard
 # with Python projects using coverage.py for coverage generation.
 #
-# coverage.py generates LCOV output which covguard consumes directly.
+# Native coverage.py JSON support is used via the --coverage-py flag.
 #
 # Usage:
 #   include:
@@ -82,14 +82,14 @@ variables:
       # Run tests with coverage
       coverage run --source=${COVERAGE_SOURCE} -m pytest ${PYTEST_ARGS}
 
-      # Export to LCOV format (covguard consumes LCOV)
-      coverage lcov -o lcov.info
+      # Export to JSON format (covguard consumes native coverage.py JSON)
+      coverage json -o coverage.json
 
       # Build covguard arguments
       COVGUARD_ARGS="check"
       COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
       COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --coverage-py coverage.json"
       COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
 
       # Add optional arguments
@@ -134,7 +134,7 @@ variables:
     paths:
       - covguard-report.json
       - covguard-comment.md
-      - lcov.info
+      - coverage.json
       - .coverage
     expire_in: 1 week
 
@@ -154,70 +154,3 @@ covguard:python:branch:
   variables:
     BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
     HEAD_REF: "${CI_COMMIT_SHA}"
-
-# Python coverage with poetry (alternative)
-# -----------------------------------------
-# Use this if you use poetry for dependency management
-.covguard_python_poetry:
-  extends: .covguard_python
-  before_script:
-    - |
-      # Install poetry
-      pip install poetry
-
-      # Install dependencies
-      poetry install --with dev
-
-      # Install coverage
-      pip install coverage pytest pytest-cov
-
-      # Install covguard
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      . "$HOME/.cargo/env"
-      cargo install covguard-cli --locked
-
-      # Set default refs for merge requests
-      if [ -z "$BASE_REF" ]; then
-        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
-      fi
-      if [ -z "$HEAD_REF" ]; then
-        export HEAD_REF="${CI_COMMIT_SHA}"
-      fi
-  script:
-    - |
-      # Generate coverage report using coverage.py with poetry
-      echo "Generating coverage report..."
-
-      # Run tests with coverage
-      poetry run coverage run --source=${COVERAGE_SOURCE} -m pytest ${PYTEST_ARGS}
-
-      # Export to LCOV format
-      poetry run coverage lcov -o lcov.info
-
-      # Build covguard arguments
-      COVGUARD_ARGS="check"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --lcov lcov.info"
-      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
-
-      # Add optional arguments
-      if [ -n "$THRESHOLD" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
-      fi
-
-      if [ -n "$SCOPE" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
-      fi
-
-      if [ -n "$PROFILE" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
-      fi
-
-      # Generate markdown output for MR comments
-      if [ "${POST_MR_COMMENT}" = "true" ]; then
-        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
-      fi
-
-      echo "Running: covguard ${COVGUARD_ARGS}"
-      covguard $COVGUARD_ARGS

@@ -14,6 +14,9 @@ rust-version.workspace = true
 
 [dependencies]
 covguard-types = { path = "../covguard-types", version = "0.1.0" }
+covguard-render-markdown = { path = "../covguard-render-markdown", version = "0.1.0" }
+covguard-render-sarif = { path = "../covguard-render-sarif", version = "0.1.0" }
+covguard-render-annotations = { path = "../covguard-render-annotations", version = "0.1.0" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 

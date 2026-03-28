@@ -53,30 +53,30 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 
 ## Future Milestones
 
-### v0.2.0 — Enhanced Ergonomics (In Progress)
+### v0.2.0 — Enhanced Ergonomics (Complete)
 
 **Focus:** Developer experience and feedback quality
 
-- [ ] Improved error messages with remediation hints
-- [ ] JaCoCo XML coverage format support (Java ecosystem)
-- [ ] coverage.py JSON format support (Python ecosystem)
-- [ ] Stdin diff input support (`--diff-file -`)
-- [ ] Performance profiling with `--timing` flag
-- [ ] Criterion benchmarks for performance tracking
-- [ ] Expanded documentation and examples
+- [x] Improved error messages with remediation hints
+- [x] JaCoCo XML coverage format support (Java ecosystem)
+- [x] coverage.py JSON format support (Python ecosystem)
+- [x] Stdin diff input support (`--diff-file -`)
+- [x] Performance profiling with `--timing` flag
+- [x] Criterion benchmarks for performance tracking
+- [x] SRP microcrate extraction for better maintenance
 
-**Status:** Parser code exists for JaCoCo and coverage.py. CLI and orchestrator integration pending.
+**Status:** v0.2.0 features fully implemented, tested via BDD, and integrated into CLI/orchestrator.
 
-### v0.3.0 — Extended Integration (Planned)
+### v0.3.0 — Extended Integration (Beta)
 
 **Focus:** CI/CD ecosystem integration
 
-- [ ] Official GitHub Action (`.github/actions/covguard/`)
-- [ ] GitLab CI templates (`templates/gitlab/`)
+- [x] Official GitHub Action (`.github/actions/covguard/`) - Support for multi-format and sensor schema
+- [x] GitLab CI templates (`templates/gitlab/`) - Support for native Java/Python tools
 - [ ] Community feedback integration
-- [ ] Performance profiling and optimization
+- [ ] Performance optimization based on profiling
 
-**Status:** Draft Action and templates exist but use incorrect CLI flags and report field paths. Needs alignment with actual CLI interface.
+**Status:** GitHub Action and GitLab templates updated to align with latest CLI features.
 
 ### v1.0.0 — Stable API
 
@@ -95,8 +95,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 | Format | Status | Notes |
 |--------|--------|-------|
 | LCOV | Shipped (v0.1.0) | Primary format, fully integrated |
-| JaCoCo XML | Parser exists | Not yet wired to CLI or orchestrator |
-| coverage.py JSON | Parser exists | Not yet wired to CLI or orchestrator |
+| JaCoCo XML | Shipped (v0.2.0) | Fully wired to CLI + orchestrator |
+| coverage.py JSON | Shipped (v0.2.0) | Fully wired to CLI + orchestrator |
 
 ### Diff Sources
 
@@ -104,7 +104,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 |--------|--------|-------|
 | Unified diff patches | Shipped (v0.1.0) | `--diff-file` |
 | Git refs | Shipped (v0.1.0) | `--base` / `--head` |
-| Stdin | In progress | `--diff-file -` pipe support |
+| Stdin | Shipped (v0.2.0) | `--diff-file -` pipe support |
 
 ### Output Formats
 
@@ -145,13 +145,13 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Stdin diff input | In progress | `--diff-file -` pipe support |
-| Enhanced error messages | In progress | Remediation hints |
-| Performance profiling | In progress | `--timing` flag, criterion benchmarks |
-| JaCoCo XML parser | Parser only | Needs CLI + orchestrator wiring |
-| coverage.py JSON parser | Parser only | Needs CLI + orchestrator wiring |
-| GitHub Action | Draft | Needs CLI flag alignment |
-| GitLab CI templates | Draft | Needs CLI flag alignment |
+| Stdin diff input | Shipped | `--diff-file -` pipe support |
+| Enhanced error messages | Shipped | Remediation hints |
+| Performance profiling | Shipped | `--timing` flag, criterion benchmarks |
+| JaCoCo XML parser | Shipped | Fully wired to CLI + orchestrator |
+| coverage.py JSON parser | Shipped | Fully wired to CLI + orchestrator |
+| GitHub Action | Shipped | Aligned with latest CLI flags |
+| GitLab CI templates | Shipped | Aligned with latest CLI flags |
 
 ### Future Features
 
@@ -187,8 +187,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 ### Integration Ecosystem
 | Platform | Status | Integration Type |
 |----------|--------|-----------------|
-| GitHub Actions | Draft | Action exists, needs CLI alignment |
-| GitLab CI | Draft | Templates exist, need CLI alignment |
+| GitHub Actions | Shipped | Aligned with latest CLI flags |
+| GitLab CI | Shipped | Aligned with latest CLI flags |
 | Bitbucket | Exploring | Community demand |
 | Azure DevOps | Exploring | Community demand |
 
@@ -197,8 +197,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 |----------|--------------|--------------|---------------|
 | Rust | cargo-llvm-cov | Shipped | — |
 | C/C++ | gcov | Shipped | — |
-| Python | coverage.py | Via lcov output | Parser exists (not wired) |
-| Java | JaCoCo | Via lcov output | Parser exists (not wired) |
+| Python | coverage.py | Via lcov output | Shipped (native JSON) |
+| Java | JaCoCo | Via lcov output | Shipped (native XML) |
 | JavaScript | c8/istanbul | Via lcov output | — |
 
 ## Related Documentation

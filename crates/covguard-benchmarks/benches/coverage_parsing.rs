@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo bench --bench coverage_parsing
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::BTreeMap;
 
 /// Generate a synthetic LCOV coverage file.
@@ -18,7 +18,11 @@ fn generate_synthetic_lcov(num_files: usize, lines_per_file: usize) -> String {
         // Line coverage records
         for line_idx in 1..=lines_per_file {
             // Vary coverage: 80% covered
-            let hits = if line_idx % 5 == 0 { 0 } else { line_idx % 10 + 1 };
+            let hits = if line_idx % 5 == 0 {
+                0
+            } else {
+                line_idx % 10 + 1
+            };
             lcov.push_str(&format!("DA:{},{}\n", line_idx, hits));
         }
 
@@ -35,11 +39,11 @@ fn bench_lcov_parsing(c: &mut Criterion) {
 
     // Test different sizes
     for (num_files, lines_per_file) in [
-        (10, 100),    // Small: 10 files, 100 lines each
-        (50, 200),    // Medium: 50 files, 200 lines each
-        (100, 500),   // Large: 100 files, 500 lines each
-        (500, 200),   // Many files: 500 files, 200 lines each
-        (1000, 100),  // Very many files: 1000 files, 100 lines each
+        (10, 100),   // Small: 10 files, 100 lines each
+        (50, 200),   // Medium: 50 files, 200 lines each
+        (100, 500),  // Large: 100 files, 500 lines each
+        (500, 200),  // Many files: 500 files, 200 lines each
+        (1000, 100), // Very many files: 1000 files, 100 lines each
     ] {
         let lcov = generate_synthetic_lcov(num_files, lines_per_file);
         let size_kb = lcov.len() / 1024;
@@ -47,7 +51,7 @@ fn bench_lcov_parsing(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(lcov.len() as u64));
         group.bench_with_input(
             BenchmarkId::new(
-                &format!("{}files_{}lines", num_files, lines_per_file),
+                format!("{}files_{}lines", num_files, lines_per_file),
                 format!("{}KB", size_kb),
             ),
             &lcov,
@@ -61,18 +65,16 @@ fn bench_lcov_parsing(c: &mut Criterion) {
                         if let Some(sf_path) = line.strip_prefix("SF:") {
                             current_file = Some(sf_path.to_string());
                             coverage.entry(sf_path.to_string()).or_default();
-                        } else if let Some(da_data) = line.strip_prefix("DA:") {
-                            if let Some(file) = &current_file {
+                        } else if let Some(da_data) = line.strip_prefix("DA:")
+                            && let Some(file) = &current_file {
                                 let parts: Vec<&str> = da_data.split(',').collect();
-                                if parts.len() >= 2 {
-                                    if let (Ok(line_num), Ok(hits)) =
+                                if parts.len() >= 2
+                                    && let (Ok(line_num), Ok(hits)) =
                                         (parts[0].parse::<u32>(), parts[1].parse::<u32>())
                                     {
                                         coverage.get_mut(file).unwrap().insert(line_num, hits);
                                     }
-                                }
                             }
-                        }
                     }
 
                     black_box(coverage)
@@ -94,7 +96,14 @@ fn bench_coverage_map_operations(c: &mut Criterion) {
         let file_path = format!("src/file_{}.rs", file_idx);
         let mut lines: BTreeMap<u32, u32> = BTreeMap::new();
         for line_idx in 1..=500 {
-            lines.insert(line_idx, if line_idx % 5 == 0 { 0 } else { line_idx % 10 + 1 });
+            lines.insert(
+                line_idx,
+                if line_idx % 5 == 0 {
+                    0
+                } else {
+                    line_idx % 10 + 1
+                },
+            );
         }
         coverage.insert(file_path, lines);
     }
@@ -150,12 +159,11 @@ fn bench_line_hit_counting(c: &mut Criterion) {
             for line in lcov.lines() {
                 if let Some(da_data) = line.strip_prefix("DA:") {
                     let parts: Vec<&str> = da_data.split(',').collect();
-                    if parts.len() >= 2 {
-                        if let Ok(hits) = parts[1].parse::<u64>() {
+                    if parts.len() >= 2
+                        && let Ok(hits) = parts[1].parse::<u64>() {
                             total_hits += hits;
                             total_lines += 1;
                         }
-                    }
                 }
             }
 
@@ -179,7 +187,11 @@ fn bench_coverage_merging(c: &mut Criterion) {
             for line_idx in 1..=200 {
                 lines.insert(
                     line_idx,
-                    if line_idx % 5 == 0 { 0 } else { (line_idx + offset) % 10 + 1 },
+                    if line_idx % 5 == 0 {
+                        0
+                    } else {
+                        (line_idx + offset) % 10 + 1
+                    },
                 );
             }
             coverage.insert(file_path, lines);

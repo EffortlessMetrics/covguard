@@ -33,10 +33,15 @@ pub trait DiffProvider {
     ) -> Result<String, String>;
 }
 
-/// Port for loading and merging LCOV coverage data.
+/// Port for loading and merging coverage data from various formats.
 pub trait CoverageProvider {
-    /// Parse an LCOV payload into a normalized coverage map.
-    fn parse_lcov(&self, text: &str, strip_prefixes: &[String]) -> Result<CoverageMap, String>;
+    /// Parse a coverage payload into a normalized coverage map.
+    fn parse_coverage(
+        &self,
+        text: &str,
+        format: covguard_types::CoverageFormat,
+        strip_prefixes: &[String],
+    ) -> Result<CoverageMap, String>;
 
     /// Merge multiple coverage maps into one.
     fn merge_coverage(&self, maps: Vec<CoverageMap>) -> CoverageMap;
