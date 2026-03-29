@@ -19,4 +19,4 @@ covguard-paths.workspace = true
 covguard-ranges.workspace = true
 
 [dev-dependencies]
-proptest = "1.10.0"
+proptest = "1.11.0"
