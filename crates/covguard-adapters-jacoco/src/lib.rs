@@ -244,9 +244,10 @@ pub fn is_jacoco_format(text: &str) -> bool {
         }
     }
     if trimmed.contains("<report")
-        && (trimmed.contains("<package") || trimmed.contains("<sourcefile")) {
-            return true;
-        }
+        && (trimmed.contains("<package") || trimmed.contains("<sourcefile"))
+    {
+        return true;
+    }
     false
 }
 

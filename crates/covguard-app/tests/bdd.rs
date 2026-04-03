@@ -65,6 +65,8 @@ pub struct CovguardWorld {
     output_flags: OutputFeatureFlags,
     /// Whether to expect an error from the check.
     expect_error: bool,
+    /// Whether to use sensor schema mode (enables skip verdicts).
+    sensor_schema: bool,
 }
 
 fn set_single_lcov(world: &mut CovguardWorld, text: String) {
@@ -91,6 +93,7 @@ fn given_ignore_directives_disabled(world: &mut CovguardWorld) {
     world.max_findings = None;
     world.output_flags = OutputFeatureFlags::default();
     world.expect_error = false;
+    world.sensor_schema = false;
     world.coverage_inputs.clear();
     world.lcov_texts.clear();
 }
@@ -130,12 +133,11 @@ fn given_diff_adding_lines(world: &mut CovguardWorld, file_path: String) {
 
 #[given(expr = "a diff adding {int} lines to {string}")]
 fn given_diff_adding_n_lines(world: &mut CovguardWorld, num_lines: i32, file_path: String) {
-    world.current_file = file_path.clone();
     let mut lines = String::new();
     for i in 1..=num_lines {
         lines.push_str(&format!("+    line_{}\n", i));
     }
-    world.diff_text = format!(
+    let new_diff = format!(
         r#"diff --git a/{file} b/{file}
 new file mode 100644
 index 0000000..1111111
@@ -147,6 +149,18 @@ index 0000000..1111111
         num = num_lines,
         lines = lines
     );
+    if world.diff_text.is_empty() {
+        world.current_file = file_path;
+        world.diff_text = new_diff;
+    } else {
+        world.additional_files.push(file_path);
+        world.diff_text.push_str(&new_diff);
+    }
+}
+
+#[given(expr = "a diff adding {int} line to {string}")]
+fn given_diff_adding_one_line(world: &mut CovguardWorld, num_lines: i32, file_path: String) {
+    given_diff_adding_n_lines(world, num_lines, file_path);
 }
 
 #[given(expr = "a diff with overlapping hunks in {string}")]
@@ -730,6 +744,142 @@ fn given_lcov_absolute_paths(world: &mut CovguardWorld, prefix: String) {
 }
 
 // ============================================================================
+// Given Steps - LCOV (additional patterns for new features)
+// ============================================================================
+
+#[given(expr = "an LCOV report with {int}% coverage")]
+fn given_lcov_pct_coverage(world: &mut CovguardWorld, percent: i32) {
+    let file = world.current_file.clone();
+    let num_lines = 100;
+    let covered_count = (num_lines * percent as i64) / 100;
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=num_lines {
+        let hits = if i <= covered_count { 1 } else { 0 };
+        lcov.push_str(&format!("DA:{},{}\n", i, hits));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given("an LCOV report with 0% coverage for that file")]
+fn given_lcov_zero_for_that_file(world: &mut CovguardWorld) {
+    let file = world.current_file.clone();
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=10 {
+        lcov.push_str(&format!("DA:{},0\n", i));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given("an LCOV report with 0% coverage for that line")]
+fn given_lcov_zero_for_that_line(world: &mut CovguardWorld) {
+    let file = world.current_file.clone();
+    set_single_lcov(world, format!("TN:\nSF:{}\nDA:1,0\nend_of_record\n", file));
+}
+
+#[given(expr = "an LCOV report with 0% coverage for line {int}")]
+fn given_lcov_zero_for_specific_line(world: &mut CovguardWorld, line: i32) {
+    let file = world.current_file.clone();
+    set_single_lcov(
+        world,
+        format!("TN:\nSF:{}\nDA:{},0\nend_of_record\n", file, line),
+    );
+}
+
+#[given("an LCOV report with 0% coverage for both files")]
+fn given_lcov_zero_for_both_files(world: &mut CovguardWorld) {
+    let file1 = world.current_file.clone();
+    let file2 = world.additional_files.first().cloned().unwrap_or_default();
+    let mut lcov = String::from("TN:\n");
+    for file in [&file1, &file2] {
+        lcov.push_str(&format!("SF:{}\n", file));
+        for i in 1..=10 {
+            lcov.push_str(&format!("DA:{},0\n", i));
+        }
+        lcov.push_str("end_of_record\n");
+    }
+    set_single_lcov(world, lcov);
+}
+
+#[given("an LCOV report with 0% coverage for all lines")]
+fn given_lcov_zero_all_lines(world: &mut CovguardWorld) {
+    let file = world.current_file.clone();
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=100 {
+        lcov.push_str(&format!("DA:{},0\n", i));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given(expr = "an LCOV report where {int} of {int} lines are covered")]
+fn given_lcov_n_of_m_covered(world: &mut CovguardWorld, covered: i32, total: i32) {
+    let file = world.current_file.clone();
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=total {
+        let hits = if i <= covered { 1 } else { 0 };
+        lcov.push_str(&format!("DA:{},{}\n", i, hits));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given(expr = "an LCOV report with line {int}-{int} covered")]
+fn given_lcov_line_range_covered(world: &mut CovguardWorld, start: i32, end: i32) {
+    let file = world.current_file.clone();
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=10 {
+        let hits = if i >= start && i <= end { 1 } else { 0 };
+        lcov.push_str(&format!("DA:{},{}\n", i, hits));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given(expr = "another LCOV report with line {int}-{int} covered")]
+fn given_another_lcov_line_range_covered(world: &mut CovguardWorld, start: i32, end: i32) {
+    let file = world.current_file.clone();
+    let mut lcov = format!("TN:\nSF:{}\n", file);
+    for i in 1..=10 {
+        let hits = if i >= start && i <= end { 1 } else { 0 };
+        lcov.push_str(&format!("DA:{},{}\n", i, hits));
+    }
+    lcov.push_str("end_of_record\n");
+    world.lcov_texts.push(lcov);
+}
+
+#[given(expr = "an LCOV report with absolute path {string}")]
+fn given_lcov_absolute_path(world: &mut CovguardWorld, abs_path: String) {
+    let mut lcov = format!("TN:\nSF:{}\n", abs_path);
+    for i in 1..=10 {
+        lcov.push_str(&format!("DA:{},0\n", i));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given(expr = "an LCOV report with Windows absolute path {string}")]
+fn given_lcov_windows_absolute_path(world: &mut CovguardWorld, abs_path: String) {
+    let mut lcov = format!("TN:\nSF:{}\n", abs_path);
+    for i in 1..=10 {
+        lcov.push_str(&format!("DA:{},0\n", i));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+#[given(regex = r#"^an LCOV report for "([^"]+)" \(different case\)$"#)]
+fn given_lcov_different_case(world: &mut CovguardWorld, file_path: String) {
+    let mut lcov = format!("TN:\nSF:{}\n", file_path);
+    for i in 1..=10 {
+        lcov.push_str(&format!("DA:{},0\n", i));
+    }
+    lcov.push_str("end_of_record\n");
+    set_single_lcov(world, lcov);
+}
+
+// ============================================================================
 // Given Steps - JaCoCo Setup
 // ============================================================================
 
@@ -802,6 +952,37 @@ fn given_jacoco_file_covered(world: &mut CovguardWorld, file: String) {
     world.coverage_inputs.push((
         content,
         format!("{}.xml", filename),
+        covguard_types::CoverageFormat::Jacoco,
+    ));
+}
+
+#[given(expr = "a JaCoCo report with line {int}-{int} covered")]
+fn given_jacoco_line_range(world: &mut CovguardWorld, start: i32, end: i32) {
+    let file_str = if world.current_file.is_empty() {
+        "src/Java.java"
+    } else {
+        world.current_file.as_str()
+    };
+    let (package, filename) = if let Some(pos) = file_str.rfind('/') {
+        (&file_str[..pos], &file_str[pos + 1..])
+    } else {
+        ("", file_str)
+    };
+    let mut lines = String::new();
+    for i in 1..=10 {
+        let (ci, mi) = if i >= start && i <= end {
+            (1, 0)
+        } else {
+            (0, 1)
+        };
+        lines.push_str(&format!(r#"<line nr="{}" ci="{}" mi="{}"/>"#, i, ci, mi));
+    }
+    let content = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><report name="Test"><package name="{package}"><sourcefile name="{filename}">{lines}</sourcefile></package></report>"#,
+    );
+    world.coverage_inputs.push((
+        content,
+        "jacoco.xml".to_string(),
         covguard_types::CoverageFormat::Jacoco,
     ));
 }
@@ -904,6 +1085,66 @@ fn given_output_feature_flags_compact(
 }
 
 // ============================================================================
+// Given Steps - Config/Misc (for configuration_edge_cases)
+// ============================================================================
+
+#[given("no config file exists")]
+fn given_no_config_file(_world: &mut CovguardWorld) {
+    // No-op: covguard doesn't use config files; absence is the default.
+}
+
+#[given("an empty config file exists")]
+fn given_empty_config_file(_world: &mut CovguardWorld) {
+    // No-op: covguard doesn't use config files.
+}
+
+#[given("a config file with unknown keys")]
+fn given_config_file_unknown_keys(_world: &mut CovguardWorld) {
+    // No-op: covguard doesn't use config files.
+}
+
+#[given("no LCOV report provided")]
+fn given_no_lcov_report(world: &mut CovguardWorld) {
+    world.lcov_texts.clear();
+    world.coverage_inputs.clear();
+}
+
+#[given(expr = "exclude pattern {string}")]
+fn given_exclude_pattern_single(world: &mut CovguardWorld, pattern: String) {
+    world.exclude_patterns.push(pattern);
+}
+
+#[given(expr = "include pattern {string}")]
+fn given_include_pattern_single(world: &mut CovguardWorld, pattern: String) {
+    world.include_patterns.push(pattern);
+}
+
+#[given(expr = "path strip prefix {string}")]
+fn given_path_strip_prefix_short(world: &mut CovguardWorld, prefix: String) {
+    world.path_strip = vec![prefix];
+}
+
+#[given(expr = "max findings of {int}")]
+fn given_max_findings_of(world: &mut CovguardWorld, max: i32) {
+    world.max_findings = Some(max as usize);
+}
+
+#[given(expr = "max annotations of {int}")]
+fn given_max_annotations_of(world: &mut CovguardWorld, max: i32) {
+    world.output_flags.max_annotations = max as usize;
+}
+
+#[given(expr = "max markdown lines of {int}")]
+fn given_max_markdown_lines(world: &mut CovguardWorld, max: i32) {
+    world.output_flags.max_markdown_lines = max as usize;
+}
+
+#[given(expr = "max SARIF results of {int}")]
+fn given_max_sarif_results(world: &mut CovguardWorld, max: i32) {
+    world.output_flags.max_sarif_results = max as usize;
+}
+
+// ============================================================================
 // When Steps
 // ============================================================================
 
@@ -976,6 +1217,11 @@ fn when_check_expecting_error(world: &mut CovguardWorld) {
 
 #[when("covguard checks coverage with both reports")]
 fn when_check_with_both_reports(world: &mut CovguardWorld) {
+    run_check(world);
+}
+
+#[when("covguard checks coverage with SARIF output")]
+fn when_check_with_sarif(world: &mut CovguardWorld) {
     run_check(world);
 }
 
@@ -1360,6 +1606,275 @@ fn then_rerun_is_deterministic(world: &mut CovguardWorld) {
     assert_eq!(
         serde_json::to_value(&first).unwrap(),
         serde_json::to_value(&second).unwrap()
+    );
+}
+
+// ============================================================================
+// Then Steps - Output Format Assertions
+// ============================================================================
+
+#[then(expr = "findings do not exist for file {string}")]
+fn then_findings_do_not_exist_for_file(world: &mut CovguardWorld, file_path: String) {
+    then_no_findings_for_file(world, file_path);
+}
+
+#[then("markdown output exists")]
+fn then_markdown_output_exists(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(!result.markdown.is_empty(), "markdown output should exist");
+}
+
+#[then(expr = "markdown contains {string}")]
+fn then_markdown_contains_text(world: &mut CovguardWorld, expected: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result
+            .markdown
+            .to_lowercase()
+            .contains(&expected.to_lowercase()),
+        "markdown should contain '{}', got:\n{}",
+        expected,
+        result.markdown
+    );
+}
+
+#[then(regex = r#"^markdown contains "([^"]+)" or "([^"]+)"$"#)]
+fn then_markdown_contains_either(world: &mut CovguardWorld, a: String, b: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let md = result.markdown.to_lowercase();
+    assert!(
+        md.contains(&a.to_lowercase()) || md.contains(&b.to_lowercase()),
+        "markdown should contain '{}' or '{}', got:\n{}",
+        a,
+        b,
+        result.markdown
+    );
+}
+
+#[then("markdown contains truncation indicator")]
+fn then_markdown_truncation_indicator(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let md = result.markdown.to_lowercase();
+    assert!(
+        md.contains("showing")
+            || md.contains("truncat")
+            || md.contains("…")
+            || md.contains("...")
+            || md.contains("more"),
+        "markdown should contain truncation indicator, got:\n{}",
+        result.markdown
+    );
+}
+
+#[then(expr = "markdown line count is approximately {int}")]
+fn then_markdown_line_count_approx(world: &mut CovguardWorld, expected: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let count = result.markdown.lines().count() as i32;
+    assert!(
+        (count - expected).abs() <= expected,
+        "Expected approximately {} markdown lines, got {}",
+        expected,
+        count
+    );
+}
+
+#[then("SARIF output is valid JSON")]
+fn then_sarif_output_valid_json(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let _: serde_json::Value =
+        serde_json::from_str(&result.sarif).expect("SARIF should be valid JSON");
+}
+
+#[then(expr = "SARIF contains {string} field")]
+fn then_sarif_contains_field(world: &mut CovguardWorld, field: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let v: serde_json::Value = serde_json::from_str(&result.sarif).unwrap();
+    assert!(
+        !v[&field].is_null(),
+        "SARIF should contain '{}' field",
+        field
+    );
+}
+
+#[then(expr = "SARIF contains {string} array")]
+fn then_sarif_contains_array(world: &mut CovguardWorld, field: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result.sarif.contains(&format!("\"{}\"", field)),
+        "SARIF should contain '{}' array",
+        field
+    );
+}
+
+#[then("SARIF results array is empty")]
+fn then_sarif_results_empty(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let v: serde_json::Value = serde_json::from_str(&result.sarif).unwrap();
+    let results = v["runs"][0]["results"]
+        .as_array()
+        .expect("SARIF should have results array");
+    assert!(results.is_empty(), "SARIF results should be empty");
+}
+
+#[then(expr = "SARIF results count is at most {int}")]
+fn then_sarif_results_at_most(world: &mut CovguardWorld, max: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let v: serde_json::Value = serde_json::from_str(&result.sarif).unwrap();
+    let results = v["runs"][0]["results"]
+        .as_array()
+        .expect("SARIF should have results array");
+    assert!(
+        results.len() as i32 <= max,
+        "Expected at most {} SARIF results, got {}",
+        max,
+        results.len()
+    );
+}
+
+#[then("SARIF contains rules section")]
+fn then_sarif_contains_rules(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let v: serde_json::Value = serde_json::from_str(&result.sarif).unwrap();
+    assert!(
+        v["runs"][0]["tool"]["driver"]["rules"].is_array(),
+        "SARIF should contain rules section"
+    );
+}
+
+#[then(expr = "SARIF rules include {string}")]
+fn then_sarif_rules_include(world: &mut CovguardWorld, rule_id: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let v: serde_json::Value = serde_json::from_str(&result.sarif).unwrap();
+    let rules = v["runs"][0]["tool"]["driver"]["rules"]
+        .as_array()
+        .expect("SARIF should have rules");
+    assert!(
+        rules.iter().any(|r| r["id"].as_str() == Some(&rule_id)),
+        "SARIF rules should include '{}'",
+        rule_id
+    );
+}
+
+#[then(expr = "annotation output contains {string}")]
+fn then_annotation_output_contains_text(world: &mut CovguardWorld, expected: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result.annotations.contains(&expected),
+        "annotations should contain '{}'",
+        expected
+    );
+}
+
+#[then(expr = "annotation contains {string}")]
+fn then_annotation_contains_text(world: &mut CovguardWorld, expected: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result.annotations.contains(&expected),
+        "annotations should contain '{}'",
+        expected
+    );
+}
+
+#[then(expr = "annotation error count is at most {int}")]
+fn then_annotation_error_count_at_most(world: &mut CovguardWorld, max: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let count = result
+        .annotations
+        .lines()
+        .filter(|l| l.starts_with("::error"))
+        .count() as i32;
+    assert!(
+        count <= max,
+        "Expected at most {} annotation errors, got {}",
+        max,
+        count
+    );
+}
+
+#[then("report JSON is valid")]
+fn then_report_json_valid(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let _: serde_json::Value =
+        serde_json::to_value(&result.report).expect("report should serialize to valid JSON");
+}
+
+#[then(expr = "report contains {string} field")]
+fn then_report_contains_field(world: &mut CovguardWorld, field: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let json = serde_json::to_value(&result.report).unwrap();
+    assert!(
+        !json[&field].is_null(),
+        "report should contain '{}' field",
+        field
+    );
+}
+
+#[then(expr = "report contains {string} array")]
+fn then_report_contains_array(world: &mut CovguardWorld, field: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let json = serde_json::to_value(&result.report).unwrap();
+    assert!(
+        json[&field].is_array(),
+        "report should contain '{}' array",
+        field
+    );
+}
+
+#[then(expr = "report contains {string} section")]
+fn then_report_contains_section(world: &mut CovguardWorld, field: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let json = serde_json::to_value(&result.report).unwrap();
+    assert!(
+        !json[&field].is_null(),
+        "report should contain '{}' section",
+        field
+    );
+}
+
+#[then(expr = "data contains {string}")]
+fn then_data_contains_field(world: &mut CovguardWorld, field: String) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let json = serde_json::to_value(&result.report.data).unwrap();
+    let json_str = serde_json::to_string(&json).unwrap();
+    assert!(
+        json_str.contains(&format!("\"{}\"", field)),
+        "data should contain '{}', got: {}",
+        field,
+        json_str
+    );
+}
+
+#[then("findings array is empty")]
+fn then_findings_array_empty(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result.report.findings.is_empty(),
+        "findings should be empty"
+    );
+}
+
+#[then("the report includes truncation indicator")]
+fn then_report_includes_truncation(world: &mut CovguardWorld) {
+    let result = world.result.as_ref().expect("check should have been run");
+    assert!(
+        result.report.data.truncation.is_some(),
+        "report should include truncation indicator"
+    );
+}
+
+#[then(expr = "the annotation output contains at most {int} errors")]
+fn then_annotation_output_max_errors(world: &mut CovguardWorld, max: i32) {
+    let result = world.result.as_ref().expect("check should have been run");
+    let count = result
+        .annotations
+        .lines()
+        .filter(|l| l.starts_with("::error"))
+        .count() as i32;
+    assert!(
+        count <= max,
+        "Expected at most {} annotation errors, got {}",
+        max,
+        count
     );
 }
 
