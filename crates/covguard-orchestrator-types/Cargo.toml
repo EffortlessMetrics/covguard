@@ -1,5 +1,6 @@
 [package]
 name = "covguard-orchestrator-types"
+description = "Application orchestration types and error definitions for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

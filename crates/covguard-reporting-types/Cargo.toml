@@ -1,5 +1,6 @@
 [package]
 name = "covguard-reporting-types"
+description = "Report context types for covguard reporting"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

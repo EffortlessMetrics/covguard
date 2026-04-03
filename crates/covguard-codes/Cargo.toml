@@ -1,5 +1,6 @@
 [package]
 name = "covguard-codes"
+description = "Canonical error codes and enhanced error traits for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

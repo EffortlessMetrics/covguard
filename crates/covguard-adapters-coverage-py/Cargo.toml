@@ -1,5 +1,6 @@
 [package]
 name = "covguard-adapters-coverage-py"
+description = "Coverage.py JSON format parser for Python test coverage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

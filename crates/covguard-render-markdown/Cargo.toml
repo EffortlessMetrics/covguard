@@ -1,5 +1,6 @@
 [package]
 name = "covguard-render-markdown"
+description = "Markdown PR comment renderer for covguard reports"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

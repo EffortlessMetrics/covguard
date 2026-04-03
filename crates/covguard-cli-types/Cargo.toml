@@ -1,5 +1,6 @@
 [package]
 name = "covguard-cli-types"
+description = "CLI argument types and command enums for covguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,5 +1,6 @@
 [package]
 name = "covguard-adapters-composite"
+description = "Composite coverage provider that combines LCOV, JaCoCo, and coverage.py formats"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
