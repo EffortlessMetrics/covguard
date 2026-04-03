@@ -1026,9 +1026,10 @@ mod tests {
         );
         // Verify the finding has the correct path if location exists
         if let Some(finding) = output.findings.first()
-            && let Some(loc) = &finding.location {
-                assert_eq!(loc.path, unicode_path);
-            }
+            && let Some(loc) = &finding.location
+        {
+            assert_eq!(loc.path, unicode_path);
+        }
     }
 
     #[test]

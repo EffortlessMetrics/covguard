@@ -5,11 +5,11 @@ use covguard_domain::EvalOutput;
 use covguard_output::truncate_findings;
 use covguard_reporting_types::ReportContext;
 use covguard_types::{
-    CHECK_ID_RUNTIME, CODE_RUNTIME_ERROR, Capabilities, Finding,
-    InputCapability, InputStatus, InputsCapability, REASON_BELOW_THRESHOLD, REASON_DIFF_COVERED,
-    REASON_MISSING_DIFF, REASON_MISSING_LCOV, REASON_NO_CHANGED_LINES, REASON_SKIPPED,
-    REASON_TOOL_ERROR, REASON_TRUNCATED, REASON_UNCOVERED_LINES, Report, ReportData, SCHEMA_ID,
-    SENSOR_SCHEMA_ID, Severity, Tool, Verdict, VerdictCounts, VerdictStatus, compute_fingerprint,
+    CHECK_ID_RUNTIME, CODE_RUNTIME_ERROR, Capabilities, Finding, InputCapability, InputStatus,
+    InputsCapability, REASON_BELOW_THRESHOLD, REASON_DIFF_COVERED, REASON_MISSING_DIFF,
+    REASON_MISSING_LCOV, REASON_NO_CHANGED_LINES, REASON_SKIPPED, REASON_TOOL_ERROR,
+    REASON_TRUNCATED, REASON_UNCOVERED_LINES, Report, ReportData, SCHEMA_ID, SENSOR_SCHEMA_ID,
+    Severity, Tool, Verdict, VerdictCounts, VerdictStatus, compute_fingerprint,
 };
 
 pub fn report_run(started_at: DateTime<Utc>, ended_at: DateTime<Utc>) -> covguard_types::Run {

@@ -3,9 +3,7 @@
 //! This is the entry point for the CLI tool.
 
 use clap::Parser;
-use covguard_cli_core::{
-    EXIT_CODE_ERROR, run, write_fallback_receipt,
-};
+use covguard_cli_core::{EXIT_CODE_ERROR, run, write_fallback_receipt};
 use covguard_cli_types::Commands;
 use covguard_types::{EnhancedError, REASON_TOOL_ERROR};
 
