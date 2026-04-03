@@ -28,5 +28,7 @@ harness = false
 [dependencies]
 criterion.workspace = true
 serde_json.workspace = true
+covguard-adapters-diff.workspace = true
+covguard-adapters-coverage.workspace = true
 
 [dev-dependencies]

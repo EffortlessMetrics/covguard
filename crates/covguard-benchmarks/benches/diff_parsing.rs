@@ -2,6 +2,7 @@
 //!
 //! Run with: cargo bench --bench diff_parsing
 
+use covguard_adapters_diff::parse_patch;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 /// Generate a synthetic diff with the specified number of files and lines per file.
@@ -70,11 +71,9 @@ fn bench_diff_parsing(c: &mut Criterion) {
             &diff,
             |b, diff| {
                 b.iter(|| {
-                    // Simulate diff parsing - in real benchmark would call actual parser
-                    let lines: Vec<&str> = black_box(diff.lines().collect());
-                    let num_hunks = lines.iter().filter(|l| l.starts_with("@@")).count();
-                    let num_added = lines.iter().filter(|l| l.starts_with('+')).count();
-                    black_box((lines.len(), num_hunks, num_added))
+                    // Call actual diff parser
+                    let result = parse_patch(black_box(diff));
+                    black_box(result)
                 });
             },
         );

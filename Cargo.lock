@@ -575,6 +575,8 @@ dependencies = [
 name = "covguard-benchmarks"
 version = "0.1.0"
 dependencies = [
+ "covguard-adapters-coverage",
+ "covguard-adapters-diff",
  "criterion",
  "serde_json",
 ]

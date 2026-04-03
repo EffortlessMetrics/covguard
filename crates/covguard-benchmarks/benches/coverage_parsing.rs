@@ -2,6 +2,7 @@
 //!
 //! Run with: cargo bench --bench coverage_parsing
 
+use covguard_adapters_coverage::parse_lcov;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::BTreeMap;
 
@@ -57,27 +58,9 @@ fn bench_lcov_parsing(c: &mut Criterion) {
             &lcov,
             |b, lcov| {
                 b.iter(|| {
-                    // Simulate LCOV parsing
-                    let mut current_file: Option<String> = None;
-                    let mut coverage: BTreeMap<String, BTreeMap<u32, u32>> = BTreeMap::new();
-
-                    for line in lcov.lines() {
-                        if let Some(sf_path) = line.strip_prefix("SF:") {
-                            current_file = Some(sf_path.to_string());
-                            coverage.entry(sf_path.to_string()).or_default();
-                        } else if let Some(da_data) = line.strip_prefix("DA:")
-                            && let Some(file) = &current_file {
-                                let parts: Vec<&str> = da_data.split(',').collect();
-                                if parts.len() >= 2
-                                    && let (Ok(line_num), Ok(hits)) =
-                                        (parts[0].parse::<u32>(), parts[1].parse::<u32>())
-                                    {
-                                        coverage.get_mut(file).unwrap().insert(line_num, hits);
-                                    }
-                            }
-                    }
-
-                    black_box(coverage)
+                    // Call actual LCOV parser
+                    let result = parse_lcov(black_box(lcov));
+                    black_box(result)
                 });
             },
         );
@@ -160,10 +143,11 @@ fn bench_line_hit_counting(c: &mut Criterion) {
                 if let Some(da_data) = line.strip_prefix("DA:") {
                     let parts: Vec<&str> = da_data.split(',').collect();
                     if parts.len() >= 2
-                        && let Ok(hits) = parts[1].parse::<u64>() {
-                            total_hits += hits;
-                            total_lines += 1;
-                        }
+                        && let Ok(hits) = parts[1].parse::<u64>()
+                    {
+                        total_hits += hits;
+                        total_lines += 1;
+                    }
                 }
             }
 
