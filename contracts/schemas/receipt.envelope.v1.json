@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:effortless:receipt.envelope.v1",
+  "$id": "https://effortlessmetrics.github.io/covguard/contracts/schemas/receipt.envelope.v1.json",
   "title": "receipt.envelope.v1",
   "type": "object",
   "additionalProperties": false,

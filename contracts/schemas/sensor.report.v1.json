@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:effortless:sensor.report.v1",
+  "$id": "https://effortlessmetrics.github.io/covguard/contracts/schemas/sensor.report.v1.json",
   "title": "sensor.report.v1",
   "description": "Cockpit ecosystem sensor report schema. Extends receipt.envelope.v1 with sensor-specific constraints.",
   "allOf": [
