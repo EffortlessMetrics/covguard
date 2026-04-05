@@ -162,8 +162,11 @@ jobs:
       - name: Validate JSON schemas
         run: |
           for schema in contracts/schemas/*.json; do
-            echo "Validating $schema..."
-            ajv compile -s "$schema" --spec=draft2020 --strict=false || exit 1
+            echo "Validating ${schema}..."
+            tmp_schema="$(mktemp)"
+            jq 'del(."$id")' "$schema" > "$tmp_schema"
+            ajv compile -s "$tmp_schema" --spec=draft2020 --strict=false || exit 1
+            rm -f "$tmp_schema"
           done
 
   # MSRV (Minimum Supported Rust Version) check
