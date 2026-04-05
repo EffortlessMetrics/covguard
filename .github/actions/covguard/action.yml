@@ -110,6 +110,12 @@ outputs:
   comment-path:
     description: 'Path to the generated markdown comment'
     value: ${{ steps.covguard.outputs.comment_path }}
+  sarif-path:
+    description: 'Path to the generated SARIF file (if enabled and produced)'
+    value: ${{ steps.covguard.outputs.sarif_path }}
+  artifact-name:
+    description: 'Artifact name used for upload'
+    value: ${{ steps.covguard.outputs.artifact_name }}
 
 runs:
   using: 'composite'
@@ -151,12 +157,42 @@ runs:
         INPUT_SARIF_OUTPUT: ${{ inputs.sarif-output }}
         INPUT_REPORT_OUTPUT: ${{ inputs.report-output }}
         INPUT_MARKDOWN_OUTPUT: ${{ inputs.markdown-output }}
+        INPUT_ARTIFACT_NAME: ${{ inputs.artifact-name }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
         INPUT_CONFIG_FILE: ${{ inputs.config-file }}
       run: |
         set -euo pipefail
 
         cd "$INPUT_WORKING_DIRECTORY"
+        mkdir -p "artifacts/covguard"
+
+        RUN_ID="${GITHUB_RUN_ID:-0}"
+        RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-0}"
+        RUN_JOB="${GITHUB_JOB:-job}"
+        UNIQUE_SUFFIX="${RUN_ID}-${RUN_ATTEMPT}-${RUN_JOB}-${RANDOM}"
+
+        REPORT_OUTPUT="$INPUT_REPORT_OUTPUT"
+        MARKDOWN_OUTPUT="$INPUT_MARKDOWN_OUTPUT"
+        SARIF_OUTPUT=""
+        ARTIFACT_NAME="$INPUT_ARTIFACT_NAME"
+        DEFAULT_REPORT_OUTPUT="artifacts/covguard/report.json"
+        DEFAULT_MARKDOWN_OUTPUT="artifacts/covguard/comment.md"
+
+        if [ -z "$REPORT_OUTPUT" ] || [ "$REPORT_OUTPUT" = "$DEFAULT_REPORT_OUTPUT" ]; then
+          REPORT_OUTPUT="artifacts/covguard/report-${UNIQUE_SUFFIX}.json"
+        fi
+
+        if [ -z "$MARKDOWN_OUTPUT" ] || [ "$MARKDOWN_OUTPUT" = "$DEFAULT_MARKDOWN_OUTPUT" ]; then
+          MARKDOWN_OUTPUT="artifacts/covguard/comment-${UNIQUE_SUFFIX}.md"
+        fi
+
+        if [ -z "$ARTIFACT_NAME" ] || [ "$ARTIFACT_NAME" = "covguard-report" ]; then
+          ARTIFACT_NAME="covguard-report-${UNIQUE_SUFFIX}"
+        fi
+
+        if [ "$INPUT_SARIF_OUTPUT" = "true" ]; then
+          SARIF_OUTPUT="artifacts/covguard/results-${UNIQUE_SUFFIX}.sarif"
+        fi
 
         # Build the covguard command
         COVGUARD_ARGS=("check")
@@ -223,8 +259,8 @@ runs:
         fi
 
         # Output paths
-        COVGUARD_ARGS+=("--out" "$INPUT_REPORT_OUTPUT")
-        COVGUARD_ARGS+=("--md" "$INPUT_MARKDOWN_OUTPUT")
+        COVGUARD_ARGS+=("--out" "$REPORT_OUTPUT")
+        COVGUARD_ARGS+=("--md" "$MARKDOWN_OUTPUT")
 
         # Threshold
         if [ -n "$INPUT_THRESHOLD" ]; then
@@ -248,7 +284,7 @@ runs:
 
         # SARIF output
         if [ "$INPUT_SARIF_OUTPUT" = "true" ]; then
-          COVGUARD_ARGS+=("--sarif" "artifacts/covguard/results.sarif")
+          COVGUARD_ARGS+=("--sarif" "$SARIF_OUTPUT")
         fi
 
         # Run covguard
@@ -263,13 +299,13 @@ runs:
         echo "$OUTPUT"
 
         # Parse the report for outputs
-        if [ -f "$INPUT_REPORT_OUTPUT" ]; then
+        if [ -f "$REPORT_OUTPUT" ]; then
           # Extract metrics from JSON report using actual schema fields
-          STATUS=$(jq -r '.verdict.status // "fail"' "$INPUT_REPORT_OUTPUT")
-          COVERAGE_PERCENT=$(jq -r '.data.diff_coverage_pct // 0' "$INPUT_REPORT_OUTPUT")
-          UNCOVERED_LINES=$(jq -r '.data.uncovered_lines // 0' "$INPUT_REPORT_OUTPUT")
-          COVERED_LINES=$(jq -r '.data.covered_lines // 0' "$INPUT_REPORT_OUTPUT")
-          TOTAL_LINES=$(jq -r '.data.changed_lines_total // 0' "$INPUT_REPORT_OUTPUT")
+          STATUS=$(jq -r '.verdict.status // "fail"' "$REPORT_OUTPUT")
+          COVERAGE_PERCENT=$(jq -r '.data.diff_coverage_pct // 0' "$REPORT_OUTPUT")
+          UNCOVERED_LINES=$(jq -r '.data.uncovered_lines // 0' "$REPORT_OUTPUT")
+          COVERED_LINES=$(jq -r '.data.covered_lines // 0' "$REPORT_OUTPUT")
+          TOTAL_LINES=$(jq -r '.data.changed_lines_total // 0' "$REPORT_OUTPUT")
 
           PASSED="false"
           if [ "$STATUS" = "pass" ] || [ "$STATUS" = "skip" ]; then
@@ -282,14 +318,20 @@ runs:
           echo "uncovered_lines=$UNCOVERED_LINES" >> $GITHUB_OUTPUT
           echo "covered_lines=$COVERED_LINES" >> $GITHUB_OUTPUT
           echo "total_lines=$TOTAL_LINES" >> $GITHUB_OUTPUT
-          echo "report_path=$INPUT_REPORT_OUTPUT" >> $GITHUB_OUTPUT
-          echo "comment_path=$INPUT_MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "report_path=$REPORT_OUTPUT" >> $GITHUB_OUTPUT
+          echo "comment_path=$MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "sarif_path=$SARIF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
         else
           echo "passed=false" >> $GITHUB_OUTPUT
           echo "coverage_percent=0" >> $GITHUB_OUTPUT
           echo "uncovered_lines=0" >> $GITHUB_OUTPUT
           echo "covered_lines=0" >> $GITHUB_OUTPUT
           echo "total_lines=0" >> $GITHUB_OUTPUT
+          echo "report_path=$REPORT_OUTPUT" >> $GITHUB_OUTPUT
+          echo "comment_path=$MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "sarif_path=$SARIF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
         fi
 
         # Exit with covguard's exit code
@@ -352,10 +394,10 @@ runs:
         echo "PR comment posted successfully!"
 
     - name: Upload SARIF to Code Scanning
-      if: inputs.sarif-output == 'true' && always()
+      if: inputs.sarif-output == 'true' && always() && steps.covguard.outputs.sarif_path != '' && hashFiles(steps.covguard.outputs.sarif_path) != ''
       uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: artifacts/covguard/results.sarif
+        sarif_file: ${{ steps.covguard.outputs.sarif_path }}
         category: covguard-diff-coverage
         wait-for-processing: true
 
@@ -363,7 +405,8 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.artifact-name }}
+        name: ${{ steps.covguard.outputs.artifact_name }}
         path: |
-          artifacts/covguard/
+          ${{ steps.covguard.outputs.report_path }}
+          ${{ steps.covguard.outputs.comment_path }}
         retention-days: 30
