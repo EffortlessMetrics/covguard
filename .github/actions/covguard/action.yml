@@ -83,6 +83,10 @@ inputs:
     description: 'Working directory for running covguard commands'
     required: false
     default: '.'
+  artifact-name:
+    description: 'Name for the uploaded artifact (must be unique per workflow run)'
+    required: false
+    default: 'covguard-report'
 
 outputs:
   passed:
@@ -115,10 +119,14 @@ runs:
       run: |
         set -euo pipefail
 
-        # Install from crates.io
-        if ! command -v covguard &> /dev/null; then
+        if command -v covguard &> /dev/null; then
+          echo "covguard already installed"
+        elif [ -f "crates/covguard-cli/Cargo.toml" ]; then
+          echo "Building covguard from source..."
+          cargo install --path crates/covguard-cli --locked
+        else
           echo "Installing covguard from crates.io..."
-          cargo install covguard-cli --locked
+          cargo install covguard --locked
         fi
 
         # Verify installation
@@ -190,7 +198,7 @@ runs:
           DIFF_BASE="$INPUT_DIFF_BASE"
           DIFF_HEAD="$INPUT_DIFF_HEAD"
 
-          if [ -z "$DIFF_BASE" ] || [ -z "$HEAD_REF" ]; then
+          if [ -z "$DIFF_BASE" ] || [ -z "$DIFF_HEAD" ]; then
             if [ -f "$GITHUB_EVENT_PATH" ]; then
               EVENT_BASE=$(jq -r '.pull_request.base.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
               EVENT_HEAD=$(jq -r '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
@@ -355,7 +363,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: covguard-report
+        name: ${{ inputs.artifact-name }}
         path: |
           artifacts/covguard/
         retention-days: 30
