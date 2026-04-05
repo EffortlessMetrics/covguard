@@ -165,7 +165,6 @@ jobs:
             echo "Validating $schema..."
             ajv compile -s "$schema" --spec=draft2020 --strict=false || exit 1
           done
-        continue-on-error: true
 
   # MSRV (Minimum Supported Rust Version) check
   msrv:
@@ -231,7 +230,6 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run security audit
-        continue-on-error: true
         run: cargo audit
 
   # Test Coverage
@@ -250,7 +248,6 @@ jobs:
         run: cargo install cargo-llvm-cov --locked
 
       - name: Run coverage
-        continue-on-error: true
         run: |
           cargo +nightly llvm-cov --workspace --all-features --tests --branch \
             --ignore-filename-regex "(tests/|bdd/|fuzz/|xtask/)" \
