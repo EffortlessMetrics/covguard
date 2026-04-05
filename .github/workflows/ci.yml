@@ -151,23 +151,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Install ajv-cli
-        run: npm install -g ajv-cli ajv-formats
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Validate JSON schemas
-        run: |
-          for schema in contracts/schemas/*.json; do
-            echo "Validating ${schema}..."
-            tmp_schema="$(mktemp)"
-            python -c 'import json,sys; import pathlib; data = json.loads(pathlib.Path(sys.argv[1]).read_text()); data.pop("$id", None); pathlib.Path(sys.argv[2]).write_text(json.dumps(data));' "$schema" "$tmp_schema"
-            ajv compile -s "$tmp_schema" --spec=draft2020 --strict=false || exit 1
-            rm -f "$tmp_schema"
-          done
+        run: cargo xtask conform --schema
 
   # MSRV (Minimum Supported Rust Version) check
   msrv:
