@@ -1,0 +1,16 @@
+[package]
+name = "covguard-render-sarif"
+description = "SARIF 2.1.0 JSON renderer for covguard reports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+covguard-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

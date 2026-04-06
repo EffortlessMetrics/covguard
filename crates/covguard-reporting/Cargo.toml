@@ -13,8 +13,6 @@ readme = "README.md"
 rust-version.workspace = true
 
 [dependencies]
-chrono.workspace = true
-covguard-domain = { path = "../covguard-domain", version = "0.1.0" }
-covguard-output = { path = "../covguard-output", version = "0.1.0" }
-covguard-types = { path = "../covguard-types", version = "0.1.0" }
-serde_json.workspace = true
+covguard-reporting-types = { path = "../covguard-reporting-types", version = "0.1.0" }
+covguard-reporting-core = { path = "../covguard-reporting-core", version = "0.1.0" }
+serde_json = { workspace = true }

@@ -29,6 +29,26 @@ covguard check \
   --out report.json
 ```
 
+### Reading diff from stdin
+
+Use `-` as the diff file path to read from stdin:
+
+```bash
+git diff main...feature | covguard check --diff-file - --lcov coverage.info --out report.json
+```
+
+Or pipe diff content directly:
+
+```bash
+cat changes.patch | covguard check --diff-file - --lcov coverage.info --out report.json
+```
+
+You can also omit `--diff-file` entirely and covguard will automatically read from stdin if no other diff source is provided:
+
+```bash
+git diff main...feature | covguard check --lcov coverage.info --out report.json
+```
+
 ### With git refs and markdown output
 
 ```bash
@@ -48,7 +68,7 @@ covguard check \
 
 | Option | Description |
 |--------|-------------|
-| `--diff-file <PATH>` | Path to diff/patch file |
+| `--diff-file <PATH>` | Path to diff/patch file, or `-` to read from stdin |
 | `--base <SHA>` | Base git ref (alternative to `--diff-file`) |
 | `--head <SHA>` | Head git ref (alternative to `--diff-file`) |
 | `--lcov <PATH>` | Path to LCOV coverage file |
@@ -68,7 +88,7 @@ covguard check \
 ## Documentation
 
 - [API Documentation](https://docs.rs/covguard)
-- [Main Repository](https://github.com/covguard/covguard)
+- [Main Repository](https://github.com/EffortlessMetrics/covguard)
 
 ## License
 

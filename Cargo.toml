@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/covguard-types",
+    "crates/covguard-codes",
     "crates/covguard-ports",
     "crates/covguard-domain",
     "crates/covguard-policy",
@@ -12,14 +13,27 @@ members = [
     "crates/covguard-adapters-coverage",
     "crates/covguard-adapters-repo",
     "crates/covguard-adapters-artifacts",
+    "crates/covguard-adapters-jacoco",
+    "crates/covguard-adapters-coverage-py",
+    "crates/covguard-adapters-composite",
+    "crates/covguard-render-markdown",
+    "crates/covguard-render-sarif",
+    "crates/covguard-render-annotations",
     "crates/covguard-render",
     "crates/covguard-config",
     "crates/covguard-output",
     "crates/covguard-output-features",
+    "crates/covguard-reporting-types",
+    "crates/covguard-reporting-core",
     "crates/covguard-reporting",
+    "crates/covguard-orchestrator-types",
     "crates/covguard-orchestrator",
     "crates/covguard-app",
     "crates/covguard-core",
+    "crates/covguard-profiling",
+    "crates/covguard-benchmarks",
+    "crates/covguard-cli-types",
+    "crates/covguard-cli-core",
     "crates/covguard-cli",
     "xtask",
 ]
@@ -31,27 +45,49 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/effortlessmetrics/cov-guard"
-homepage = "https://github.com/effortlessmetrics/cov-guard"
+repository = "https://github.com/EffortlessMetrics/covguard"
+homepage = "https://github.com/EffortlessMetrics/covguard"
 readme = "README.md"
 keywords = ["coverage", "diff", "testing", "ci", "code-coverage"]
 categories = ["development-tools::testing", "command-line-utilities"]
 rust-version = "1.92"
 
 [workspace.dependencies]
-covguard-adapters-artifacts = { path = "crates/covguard-adapters-artifacts", version = "0.1.0" }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-covguard-output-features = { path = "crates/covguard-output-features", version = "0.1.0" }
+covguard-types = { path = "crates/covguard-types", version = "0.1.0" }
+covguard-codes = { path = "crates/covguard-codes", version = "0.1.0" }
+covguard-ports = { path = "crates/covguard-ports", version = "0.1.0" }
+covguard-domain = { path = "crates/covguard-domain", version = "0.1.0" }
 covguard-policy = { path = "crates/covguard-policy", version = "0.1.0" }
 covguard-directives = { path = "crates/covguard-directives", version = "0.1.0" }
 covguard-paths = { path = "crates/covguard-paths", version = "0.1.0" }
 covguard-ranges = { path = "crates/covguard-ranges", version = "0.1.0" }
-covguard-output = { path = "crates/covguard-output", version = "0.1.0" }
-covguard-reporting = { path = "crates/covguard-reporting", version = "0.1.0" }
-covguard-orchestrator = { path = "crates/covguard-orchestrator", version = "0.1.0" }
+covguard-adapters-diff = { path = "crates/covguard-adapters-diff", version = "0.1.0" }
+covguard-adapters-coverage = { path = "crates/covguard-adapters-coverage", version = "0.1.0" }
+covguard-adapters-repo = { path = "crates/covguard-adapters-repo", version = "0.1.0" }
+covguard-adapters-artifacts = { path = "crates/covguard-adapters-artifacts", version = "0.1.0" }
+covguard-adapters-jacoco = { path = "crates/covguard-adapters-jacoco", version = "0.1.0" }
+covguard-adapters-coverage-py = { path = "crates/covguard-adapters-coverage-py", version = "0.1.0" }
+covguard-adapters-composite = { path = "crates/covguard-adapters-composite", version = "0.1.0" }
+covguard-render-markdown = { path = "crates/covguard-render-markdown", version = "0.1.0" }
+covguard-render-sarif = { path = "crates/covguard-render-sarif", version = "0.1.0" }
+covguard-render-annotations = { path = "crates/covguard-render-annotations", version = "0.1.0" }
 covguard-render = { path = "crates/covguard-render", version = "0.1.0" }
-covguard-types = { path = "crates/covguard-types", version = "0.1.0" }
+covguard-config = { path = "crates/covguard-config", version = "0.1.0" }
+covguard-output = { path = "crates/covguard-output", version = "0.1.0" }
+covguard-output-features = { path = "crates/covguard-output-features", version = "0.1.0" }
+covguard-reporting-types = { path = "crates/covguard-reporting-types", version = "0.1.0" }
+covguard-reporting-core = { path = "crates/covguard-reporting-core", version = "0.1.0" }
+covguard-reporting = { path = "crates/covguard-reporting", version = "0.1.0" }
+covguard-orchestrator-types = { path = "crates/covguard-orchestrator-types", version = "0.1.0" }
+covguard-orchestrator = { path = "crates/covguard-orchestrator", version = "0.1.0" }
+covguard-app = { path = "crates/covguard-app", version = "0.1.0" }
+covguard-core = { path = "crates/covguard-core", version = "0.1.0" }
+covguard-profiling = { path = "crates/covguard-profiling", version = "0.1.0" }
+covguard-cli-types = { path = "crates/covguard-cli-types", version = "0.1.0" }
+covguard-cli-core = { path = "crates/covguard-cli-core", version = "0.1.0" }
+
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 toml = "1.0.6"
 thiserror = "2.0.18"
 chrono = { version = "0.4.44", features = ["serde"] }
@@ -61,3 +97,7 @@ insta = { version = "1.46.3", features = ["json"] }
 cucumber = "0.22.1"
 futures = "0.3.32"
 uselesskey = { version = "0.2.0", default-features = false, features = ["rsa"] }
+criterion = "0.5"
+
+[profile.release]
+debug = true  # Enable debug symbols for profiling

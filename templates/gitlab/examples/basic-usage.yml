@@ -1,0 +1,33 @@
+# Basic Usage Example
+# ===================
+# This example shows the minimal configuration needed to use covguard
+# in your GitLab CI/CD pipeline.
+#
+# Copy this file to your project and adjust the variables as needed.
+
+# Include the base template
+include:
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
+
+# Define variables for covguard
+variables:
+  # Required: Path to your coverage report
+  COVERAGE_FILE: "coverage/lcov.info"
+  
+  # Optional: Coverage format (lcov, jacoco, coverage-py)
+  # COVERAGE_FORMAT: "lcov"
+  
+  # Optional: covguard version
+  # COVGUARD_VERSION: "latest"
+
+# The covguard job is automatically defined by the included template.
+# It will run on merge requests and on the default branch.
+
+# If you need to customize when covguard runs, you can override the job:
+# covguard:mr:
+#   extends: .covguard_base
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+#       when: manual
+#   variables:
+#     COVERAGE_FILE: "coverage/lcov.info"

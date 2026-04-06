@@ -1,0 +1,412 @@
+name: 'covguard'
+description: 'Diff-scoped coverage gate for pull requests - ensures new/changed code is covered by tests'
+author: 'EffortlessMetrics'
+
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  lcov-file:
+    description: 'Path to the LCOV coverage report file (repeatable)'
+    required: false
+    default: ''
+  jacoco-file:
+    description: 'Path to the JaCoCo XML coverage report file (repeatable)'
+    required: false
+    default: ''
+  coverage-py-file:
+    description: 'Path to the coverage.py JSON report file (repeatable)'
+    required: false
+    default: ''
+  coverage-file:
+    description: 'Path to any supported coverage report file (auto-detect)'
+    required: false
+    default: ''
+  sensor-schema:
+    description: 'Emit sensor.report.v1 schema with capabilities block'
+    required: false
+    default: 'false'
+  diff-base:
+    description: 'Base ref for diff comparison (e.g., origin/main).'
+    required: false
+    default: ''
+  diff-head:
+    description: 'Head ref for diff comparison (e.g., SHA).'
+    required: false
+    default: ''
+  diff-file:
+    description: 'Path to a pre-generated patch/diff file. If provided, diff-base and diff-head are ignored.'
+    required: false
+    default: ''
+  threshold:
+    description: 'Minimum diff coverage percentage required to pass (0-100).'
+    required: false
+    default: ''
+  scope:
+    description: 'Line scope: added (default) or touched'
+    required: false
+    default: ''
+  profile:
+    description: 'Configuration profile: oss, moderate, team, strict, lenient'
+    required: false
+    default: ''
+  comment-pr:
+    description: 'Post a comment on the pull request with coverage results'
+    required: false
+    default: 'true'
+  comment-mode:
+    description: 'How to post PR comments (create, update, or delete-on-pass)'
+    required: false
+    default: 'update'
+  sarif-output:
+    description: 'Generate SARIF output for GitHub Code Scanning'
+    required: false
+    default: 'false'
+  report-output:
+    description: 'Path to write the JSON report (relative to workspace)'
+    required: false
+    default: 'artifacts/covguard/report.json'
+  markdown-output:
+    description: 'Path to write the markdown comment (relative to workspace)'
+    required: false
+    default: 'artifacts/covguard/comment.md'
+  token:
+    description: 'GitHub token for PR comments (uses GITHUB_TOKEN by default)'
+    required: false
+    default: ''
+  config-file:
+    description: 'Path to covguard configuration file (covguard.toml)'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for running covguard commands'
+    required: false
+    default: '.'
+  artifact-name:
+    description: 'Name for the uploaded artifact (must be unique per workflow run)'
+    required: false
+    default: 'covguard-report'
+
+outputs:
+  passed:
+    description: 'Whether the coverage check passed (true/false)'
+    value: ${{ steps.covguard.outputs.passed }}
+  coverage-percent:
+    description: 'Diff coverage percentage (0-100)'
+    value: ${{ steps.covguard.outputs.coverage_percent }}
+  uncovered-lines:
+    description: 'Number of uncovered changed lines'
+    value: ${{ steps.covguard.outputs.uncovered_lines }}
+  covered-lines:
+    description: 'Number of covered changed lines'
+    value: ${{ steps.covguard.outputs.covered_lines }}
+  total-lines:
+    description: 'Total number of changed lines'
+    value: ${{ steps.covguard.outputs.total_lines }}
+  report-path:
+    description: 'Path to the generated JSON report'
+    value: ${{ steps.covguard.outputs.report_path }}
+  comment-path:
+    description: 'Path to the generated markdown comment'
+    value: ${{ steps.covguard.outputs.comment_path }}
+  sarif-path:
+    description: 'Path to the generated SARIF file (if enabled and produced)'
+    value: ${{ steps.covguard.outputs.sarif_path }}
+  artifact-name:
+    description: 'Artifact name used for upload'
+    value: ${{ steps.covguard.outputs.artifact_name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install covguard
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if command -v covguard &> /dev/null; then
+          echo "covguard already installed"
+        elif [ -f "crates/covguard-cli/Cargo.toml" ]; then
+          echo "Building covguard from source..."
+          cargo install --path crates/covguard-cli --locked
+        else
+          echo "Installing covguard from crates.io..."
+          cargo install covguard --locked
+        fi
+
+        # Verify installation
+        covguard --version
+        echo "covguard installed successfully!"
+
+    - name: Run covguard check
+      id: covguard
+      shell: bash
+      env:
+        INPUT_LCOV_FILE: ${{ inputs.lcov-file }}
+        INPUT_JACOCO_FILE: ${{ inputs.jacoco-file }}
+        INPUT_COVERAGE_PY_FILE: ${{ inputs.coverage-py-file }}
+        INPUT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        INPUT_SENSOR_SCHEMA: ${{ inputs.sensor-schema }}
+        INPUT_DIFF_BASE: ${{ inputs.diff-base }}
+        INPUT_DIFF_HEAD: ${{ inputs.diff-head }}
+        INPUT_DIFF_FILE: ${{ inputs.diff-file }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_SCOPE: ${{ inputs.scope }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_SARIF_OUTPUT: ${{ inputs.sarif-output }}
+        INPUT_REPORT_OUTPUT: ${{ inputs.report-output }}
+        INPUT_MARKDOWN_OUTPUT: ${{ inputs.markdown-output }}
+        INPUT_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_CONFIG_FILE: ${{ inputs.config-file }}
+      run: |
+        set -euo pipefail
+
+        cd "$INPUT_WORKING_DIRECTORY"
+        mkdir -p "artifacts/covguard"
+
+        RUN_ID="${GITHUB_RUN_ID:-0}"
+        RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-0}"
+        RUN_JOB="${GITHUB_JOB:-job}"
+        UNIQUE_SUFFIX="${RUN_ID}-${RUN_ATTEMPT}-${RUN_JOB}-${RANDOM}"
+
+        REPORT_OUTPUT="$INPUT_REPORT_OUTPUT"
+        MARKDOWN_OUTPUT="$INPUT_MARKDOWN_OUTPUT"
+        SARIF_OUTPUT=""
+        ARTIFACT_NAME="$INPUT_ARTIFACT_NAME"
+        DEFAULT_REPORT_OUTPUT="artifacts/covguard/report.json"
+        DEFAULT_MARKDOWN_OUTPUT="artifacts/covguard/comment.md"
+
+        if [ -z "$REPORT_OUTPUT" ] || [ "$REPORT_OUTPUT" = "$DEFAULT_REPORT_OUTPUT" ]; then
+          REPORT_OUTPUT="artifacts/covguard/report-${UNIQUE_SUFFIX}.json"
+        fi
+
+        if [ -z "$MARKDOWN_OUTPUT" ] || [ "$MARKDOWN_OUTPUT" = "$DEFAULT_MARKDOWN_OUTPUT" ]; then
+          MARKDOWN_OUTPUT="artifacts/covguard/comment-${UNIQUE_SUFFIX}.md"
+        fi
+
+        if [ -z "$ARTIFACT_NAME" ] || [ "$ARTIFACT_NAME" = "covguard-report" ]; then
+          ARTIFACT_NAME="covguard-report-${UNIQUE_SUFFIX}"
+        fi
+
+        if [ "$INPUT_SARIF_OUTPUT" = "true" ]; then
+          SARIF_OUTPUT="artifacts/covguard/results-${UNIQUE_SUFFIX}.sarif"
+        fi
+
+        # Build the covguard command
+        COVGUARD_ARGS=("check")
+
+        # Coverage files
+        if [ -n "$INPUT_LCOV_FILE" ]; then
+          for file in $INPUT_LCOV_FILE; do
+            COVGUARD_ARGS+=("--lcov" "$file")
+          done
+        fi
+
+        if [ -n "$INPUT_JACOCO_FILE" ]; then
+          for file in $INPUT_JACOCO_FILE; do
+            COVGUARD_ARGS+=("--jacoco" "$file")
+          done
+        fi
+
+        if [ -n "$INPUT_COVERAGE_PY_FILE" ]; then
+          for file in $INPUT_COVERAGE_PY_FILE; do
+            COVGUARD_ARGS+=("--coverage-py" "$file")
+          done
+        fi
+
+        if [ -n "$INPUT_COVERAGE_FILE" ]; then
+          for file in $INPUT_COVERAGE_FILE; do
+            COVGUARD_ARGS+=("--coverage" "$file")
+          done
+        fi
+
+        # Sensor schema
+        if [ "$INPUT_SENSOR_SCHEMA" = "true" ]; then
+          COVGUARD_ARGS+=("--sensor-schema")
+        fi
+
+        # Diff options
+        if [ -n "$INPUT_DIFF_FILE" ]; then
+          COVGUARD_ARGS+=("--diff-file" "$INPUT_DIFF_FILE")
+        else
+          DIFF_BASE="$INPUT_DIFF_BASE"
+          DIFF_HEAD="$INPUT_DIFF_HEAD"
+
+          if [ -z "$DIFF_BASE" ] || [ -z "$DIFF_HEAD" ]; then
+            if [ -f "$GITHUB_EVENT_PATH" ]; then
+              EVENT_BASE=$(jq -r '.pull_request.base.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+              EVENT_HEAD=$(jq -r '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+              if [ -z "$DIFF_BASE" ] && [ -n "$EVENT_BASE" ]; then
+                DIFF_BASE="$EVENT_BASE"
+              fi
+              if [ -z "$DIFF_HEAD" ] && [ -n "$EVENT_HEAD" ]; then
+                DIFF_HEAD="$EVENT_HEAD"
+              fi
+            fi
+            if [ -z "$DIFF_BASE" ] && [ -n "$GITHUB_BASE_REF" ]; then
+              DIFF_BASE="$GITHUB_BASE_REF"
+            fi
+          fi
+
+          if [ -n "$DIFF_BASE" ]; then
+            COVGUARD_ARGS+=("--base" "$DIFF_BASE")
+          fi
+          if [ -n "$DIFF_HEAD" ]; then
+            COVGUARD_ARGS+=("--head" "$DIFF_HEAD")
+          fi
+        fi
+
+        # Output paths
+        COVGUARD_ARGS+=("--out" "$REPORT_OUTPUT")
+        COVGUARD_ARGS+=("--md" "$MARKDOWN_OUTPUT")
+
+        # Threshold
+        if [ -n "$INPUT_THRESHOLD" ]; then
+          COVGUARD_ARGS+=("--threshold" "$INPUT_THRESHOLD")
+        fi
+
+        # Scope
+        if [ -n "$INPUT_SCOPE" ]; then
+          COVGUARD_ARGS+=("--scope" "$INPUT_SCOPE")
+        fi
+
+        # Profile
+        if [ -n "$INPUT_PROFILE" ]; then
+          COVGUARD_ARGS+=("--profile" "$INPUT_PROFILE")
+        fi
+
+        # Config file
+        if [ -n "$INPUT_CONFIG_FILE" ]; then
+          COVGUARD_ARGS+=("--config" "$INPUT_CONFIG_FILE")
+        fi
+
+        # SARIF output
+        if [ "$INPUT_SARIF_OUTPUT" = "true" ]; then
+          COVGUARD_ARGS+=("--sarif" "$SARIF_OUTPUT")
+        fi
+
+        # Run covguard
+        echo "Running: covguard ${COVGUARD_ARGS[*]}"
+
+        # Capture exit code
+        set +e
+        OUTPUT=$(covguard "${COVGUARD_ARGS[@]}" 2>&1)
+        EXIT_CODE=$?
+        set -e
+
+        echo "$OUTPUT"
+
+        # Parse the report for outputs
+        if [ -f "$REPORT_OUTPUT" ]; then
+          # Extract metrics from JSON report using actual schema fields
+          STATUS=$(jq -r '.verdict.status // "fail"' "$REPORT_OUTPUT")
+          COVERAGE_PERCENT=$(jq -r '.data.diff_coverage_pct // 0' "$REPORT_OUTPUT")
+          UNCOVERED_LINES=$(jq -r '.data.uncovered_lines // 0' "$REPORT_OUTPUT")
+          COVERED_LINES=$(jq -r '.data.covered_lines // 0' "$REPORT_OUTPUT")
+          TOTAL_LINES=$(jq -r '.data.changed_lines_total // 0' "$REPORT_OUTPUT")
+
+          PASSED="false"
+          if [ "$STATUS" = "pass" ] || [ "$STATUS" = "skip" ]; then
+            PASSED="true"
+          fi
+
+          # Set GitHub outputs
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "coverage_percent=$COVERAGE_PERCENT" >> $GITHUB_OUTPUT
+          echo "uncovered_lines=$UNCOVERED_LINES" >> $GITHUB_OUTPUT
+          echo "covered_lines=$COVERED_LINES" >> $GITHUB_OUTPUT
+          echo "total_lines=$TOTAL_LINES" >> $GITHUB_OUTPUT
+          echo "report_path=$REPORT_OUTPUT" >> $GITHUB_OUTPUT
+          echo "comment_path=$MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "sarif_path=$SARIF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+        else
+          echo "passed=false" >> $GITHUB_OUTPUT
+          echo "coverage_percent=0" >> $GITHUB_OUTPUT
+          echo "uncovered_lines=0" >> $GITHUB_OUTPUT
+          echo "covered_lines=0" >> $GITHUB_OUTPUT
+          echo "total_lines=0" >> $GITHUB_OUTPUT
+          echo "report_path=$REPORT_OUTPUT" >> $GITHUB_OUTPUT
+          echo "comment_path=$MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "sarif_path=$SARIF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+        fi
+
+        # Exit with covguard's exit code
+        exit $EXIT_CODE
+
+    - name: Post PR Comment
+      if: inputs.comment-pr == 'true' && github.event_name == 'pull_request' && always()
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token || github.token }}
+        COMMENT_MODE: ${{ inputs.comment-mode }}
+        MARKDOWN_PATH: ${{ inputs.markdown-output }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PASSED: ${{ steps.covguard.outputs.passed }}
+      run: |
+        set -euo pipefail
+
+        # Skip if no markdown file
+        if [ ! -f "$MARKDOWN_PATH" ]; then
+          echo "No markdown output to post"
+          exit 0
+        fi
+
+        MARKER="<!-- covguard-comment pr=$PR_NUMBER -->"
+
+        # Handle delete-on-pass mode
+        if [ "$COMMENT_MODE" = "delete-on-pass" ] && [ "$PASSED" = "true" ]; then
+          echo "Coverage check passed, deleting any existing comment..."
+
+          EXISTING_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("'"$MARKER"'")) | .id' | head -1 || true)
+
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            gh api --method DELETE repos/$GITHUB_REPOSITORY/issues/comments/$EXISTING_COMMENT_ID
+            echo "Deleted existing comment"
+          fi
+          exit 0
+        fi
+
+        # Read markdown content
+        COMMENT_BODY=$(cat "$MARKDOWN_PATH")
+
+        # Check for existing comment
+        EXISTING_COMMENT_ID=$(gh api repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
+          --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("'"$MARKER"'")) | .id' | head -1 || true)
+
+        if [ "$COMMENT_MODE" = "update" ] && [ -n "$EXISTING_COMMENT_ID" ]; then
+          echo "Updating existing comment..."
+          gh api --method PATCH repos/$GITHUB_REPOSITORY/issues/comments/$EXISTING_COMMENT_ID \
+            -f body="${MARKER}
+        ${COMMENT_BODY}"
+        else
+          echo "Creating new comment..."
+          gh api --method POST repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments \
+            -f body="${MARKER}
+        ${COMMENT_BODY}"
+        fi
+
+        echo "PR comment posted successfully!"
+
+    - name: Upload SARIF to Code Scanning
+      if: inputs.sarif-output == 'true' && always() && steps.covguard.outputs.sarif_path != '' && hashFiles(steps.covguard.outputs.sarif_path) != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.covguard.outputs.sarif_path }}
+        category: covguard-diff-coverage
+        wait-for-processing: true
+
+    - name: Upload Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.covguard.outputs.artifact_name }}
+        path: |
+          ${{ steps.covguard.outputs.report_path }}
+          ${{ steps.covguard.outputs.comment_path }}
+        retention-days: 30

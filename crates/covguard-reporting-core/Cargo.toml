@@ -1,0 +1,19 @@
+[package]
+name = "covguard-reporting-core"
+description = "Core report assembly logic for covguard (standard + sensor schemas)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+covguard-reporting-types = { path = "../covguard-reporting-types", version = "0.1.0" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+covguard-domain = { path = "../covguard-domain", version = "0.1.0" }
+covguard-output = { path = "../covguard-output", version = "0.1.0" }
+chrono = { workspace = true }
+serde_json = { workspace = true }

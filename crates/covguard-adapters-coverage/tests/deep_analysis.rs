@@ -137,9 +137,9 @@ fn test_lcov_with_only_whitespace() {
 
 #[test]
 fn test_lcov_with_only_comments_or_tn() {
-    // TN: without any SF should result in empty coverage
-    let coverage = parse_lcov("TN:test_name\n").unwrap();
-    assert!(coverage.is_empty());
+    // TN: without any SF should result in empty coverage error since no valid DA records exist
+    let err = parse_lcov("TN:test_name\n").unwrap_err();
+    assert_eq!(err, covguard_adapters_coverage::LcovError::EmptyFile);
 }
 
 #[test]
@@ -477,10 +477,8 @@ fn test_error_da_without_sf() {
     let result = parse_lcov(lcov);
     assert!(result.is_err());
     match result {
-        Err(LcovError::InvalidFormat(msg)) => {
-            assert!(msg.contains("without preceding SF"));
-        }
-        _ => panic!("Expected InvalidFormat error"),
+        Err(LcovError::MissingSourceFile { .. }) => {}
+        _ => panic!("Expected MissingSourceFile error"),
     }
 }
 
@@ -490,10 +488,8 @@ fn test_error_invalid_da_missing_comma() {
     let result = parse_lcov(lcov);
     assert!(result.is_err());
     match result {
-        Err(LcovError::InvalidFormat(msg)) => {
-            assert!(msg.contains("Invalid DA format"));
-        }
-        _ => panic!("Expected InvalidFormat error"),
+        Err(LcovError::InvalidDaRecord { .. }) => {}
+        _ => panic!("Expected InvalidDaRecord error"),
     }
 }
 
@@ -503,8 +499,8 @@ fn test_error_invalid_da_missing_hits() {
     let result = parse_lcov(lcov);
     assert!(result.is_err());
     match result {
-        Err(LcovError::InvalidFormat(msg)) => {
-            assert!(msg.contains("Invalid hit count"));
+        Err(LcovError::InvalidFormat { message, .. }) => {
+            assert!(message.contains("Invalid hit count"));
         }
         _ => panic!("Expected InvalidFormat error"),
     }
@@ -516,8 +512,8 @@ fn test_error_invalid_line_number() {
     let result = parse_lcov(lcov);
     assert!(result.is_err());
     match result {
-        Err(LcovError::InvalidFormat(msg)) => {
-            assert!(msg.contains("Invalid line number"));
+        Err(LcovError::InvalidFormat { message, .. }) => {
+            assert!(message.contains("Invalid line number"));
         }
         _ => panic!("Expected InvalidFormat error"),
     }
@@ -529,8 +525,8 @@ fn test_error_invalid_hit_count() {
     let result = parse_lcov(lcov);
     assert!(result.is_err());
     match result {
-        Err(LcovError::InvalidFormat(msg)) => {
-            assert!(msg.contains("Invalid hit count"));
+        Err(LcovError::InvalidFormat { message, .. }) => {
+            assert!(message.contains("Invalid hit count"));
         }
         _ => panic!("Expected InvalidFormat error"),
     }

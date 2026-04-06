@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">
+<report name="Example Project">
+  <sessioninfo id="test-session" start="1609459200000" dump="1609459260000"/>
+  <package name="com/example">
+    <class name="Foo" sourcefile="Foo.java">
+      <method name="<init>" desc="()V" line="5">
+        <counter type="INSTRUCTION" missed="3" covered="0"/>
+        <counter type="LINE" missed="1" covered="0"/>
+        <counter type="COMPLEXITY" missed="1" covered="0"/>
+        <counter type="METHOD" missed="1" covered="0"/>
+      </method>
+      <method name="coveredMethod" desc="()V" line="10">
+        <counter type="INSTRUCTION" missed="0" covered="5"/>
+        <counter type="LINE" missed="0" covered="2"/>
+        <counter type="COMPLEXITY" missed="0" covered="1"/>
+        <counter type="METHOD" missed="0" covered="1"/>
+      </method>
+      <counter type="INSTRUCTION" missed="3" covered="5"/>
+      <counter type="LINE" missed="1" covered="2"/>
+      <counter type="COMPLEXITY" missed="1" covered="1"/>
+      <counter type="METHOD" missed="1" covered="1"/>
+      <counter type="CLASS" missed="0" covered="1"/>
+    </class>
+    <sourcefile name="Foo.java">
+      <line nr="5" mi="3" ci="0" mb="0" cb="0"/>
+      <line nr="10" mi="0" ci="3" mb="0" cb="0"/>
+      <line nr="11" mi="0" ci="2" mb="0" cb="0"/>
+      <counter type="INSTRUCTION" missed="3" covered="5"/>
+      <counter type="LINE" missed="1" covered="2"/>
+      <counter type="COMPLEXITY" missed="1" covered="1"/>
+      <counter type="METHOD" missed="1" covered="1"/>
+      <counter type="CLASS" missed="0" covered="1"/>
+    </sourcefile>
+  </package>
+  <counter type="INSTRUCTION" missed="3" covered="5"/>
+  <counter type="LINE" missed="1" covered="2"/>
+  <counter type="COMPLEXITY" missed="1" covered="1"/>
+  <counter type="METHOD" missed="1" covered="1"/>
+  <counter type="CLASS" missed="0" covered="1"/>
+</report>

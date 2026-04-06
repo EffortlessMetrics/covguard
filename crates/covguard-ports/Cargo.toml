@@ -14,3 +14,8 @@ rust-version.workspace = true
 
 [dependencies]
 chrono.workspace = true
+covguard-types = { workspace = true }
+proptest = { version = "1.6.0", optional = true }
+
+[features]
+proptest = ["dep:proptest"]

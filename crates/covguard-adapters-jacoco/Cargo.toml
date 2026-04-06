@@ -1,0 +1,22 @@
+[package]
+name = "covguard-adapters-jacoco"
+description = "JaCoCo XML format parser for Java test coverage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+covguard-paths = { workspace = true }
+covguard-ports = { workspace = true }
+covguard-types = { workspace = true }
+quick-xml = "0.37.2"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

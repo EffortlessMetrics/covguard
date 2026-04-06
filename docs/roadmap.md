@@ -25,7 +25,7 @@ covguard ensures every changed line in a PR has test coverage. It's a diff-scope
 
 ## Release History
 
-### v0.1.0 (2026-03-12) - Initial Release
+### v0.1.0 (2026-03-12) — Initial Release
 
 **20 crates published to [crates.io](https://crates.io/search?q=covguard)**
 
@@ -53,27 +53,32 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 
 ## Future Milestones
 
-### v0.2.0 - Enhanced Ergonomics
+### v0.2.0 — Enhanced Ergonomics (Complete)
 
 **Focus:** Developer experience and feedback quality
 
-- Improved error messages with remediation hints
-- Additional coverage format support (investigation)
-- Performance optimizations for large repos
-- Expanded documentation and examples
-- Example repository with multiple CI configurations
+- [x] Improved error messages with remediation hints
+- [x] JaCoCo XML coverage format support (Java ecosystem)
+- [x] coverage.py JSON format support (Python ecosystem)
+- [x] Stdin diff input support (`--diff-file -`)
+- [x] Performance profiling with `--timing` flag
+- [x] Criterion benchmarks for performance tracking
+- [x] SRP microcrate extraction for better maintenance
 
-### v0.3.0 - Extended Integration
+**Status:** v0.2.0 features fully implemented, tested via BDD, and integrated into CLI/orchestrator.
+
+### v0.3.0 — Extended Integration (Beta)
 
 **Focus:** CI/CD ecosystem integration
 
-- Official GitHub Action
-- GitLab CI templates
-- Additional output formats as needed
-- Community feedback integration
-- Performance profiling and optimization
+- [x] Official GitHub Action (`.github/actions/covguard/`) - Support for multi-format and sensor schema
+- [x] GitLab CI templates (`templates/gitlab/`) - Support for native Java/Python tools
+- [ ] Community feedback integration
+- [ ] Performance optimization based on profiling
 
-### v1.0.0 - Stable API
+**Status:** GitHub Action and GitLab templates updated to align with latest CLI features.
+
+### v1.0.0 — Stable API
 
 **Focus:** Production stability
 
@@ -89,65 +94,71 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 
 | Format | Status | Notes |
 |--------|--------|-------|
-| LCOV | ✅ v0.1.0 | Primary format |
-| Jacoco | 🔍 Investigating | Java ecosystem |
-| coverage.py | 🔍 Investigating | Python ecosystem |
+| LCOV | Shipped (v0.1.0) | Primary format, fully integrated |
+| JaCoCo XML | Shipped (v0.2.0) | Fully wired to CLI + orchestrator |
+| coverage.py JSON | Shipped (v0.2.0) | Fully wired to CLI + orchestrator |
 
 ### Diff Sources
 
 | Source | Status | Notes |
 |--------|--------|-------|
-| Unified diff patches | ✅ v0.1.0 | `--diff-file` |
-| Git refs | ✅ v0.1.0 | `--base` / `--head` |
-| Stdin | 🔍 Planned | Pipe support |
+| Unified diff patches | Shipped (v0.1.0) | `--diff-file` |
+| Git refs | Shipped (v0.1.0) | `--base` / `--head` |
+| Stdin | Shipped (v0.2.0) | `--diff-file -` pipe support |
 
 ### Output Formats
 
 | Format | Status | Notes |
 |--------|--------|-------|
-| JSON Report | ✅ v0.1.0 | Schema-compliant |
-| Markdown | ✅ v0.1.0 | PR comments |
-| GitHub Annotations | ✅ v0.1.0 | Workflow integration |
-| SARIF 2.1.0 | ✅ v0.1.0 | Code scanning |
+| JSON Report | Shipped (v0.1.0) | Schema-compliant |
+| Markdown | Shipped (v0.1.0) | PR comments |
+| GitHub Annotations | Shipped (v0.1.0) | Workflow integration |
+| SARIF 2.1.0 | Shipped (v0.1.0) | Code scanning |
 
 ### Configuration
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| CLI flags | ✅ v0.1.0 | Full support |
-| TOML config | ✅ v0.1.0 | `covguard.toml` |
-| Built-in profiles | ✅ v0.1.0 | 5 profiles |
-| Ignore directives | ✅ v0.1.0 | Line/block level |
+| CLI flags | Shipped (v0.1.0) | Full support |
+| TOML config | Shipped (v0.1.0) | `covguard.toml` |
+| Built-in profiles | Shipped (v0.1.0) | 5 profiles |
+| Ignore directives | Shipped (v0.1.0) | Line/block level |
 
 ## Feature Roadmap
 
-### Core Features
+### Core Features (v0.1.0)
 
-| Feature | Status | Version | Notes |
-|---------|--------|---------|-------|
-| Diff parsing (unified) | ✅ Complete | 0.1.0 | Patch files, git refs |
-| LCOV parsing | ✅ Complete | 0.1.0 | Full format support |
-| Policy evaluation | ✅ Complete | 0.1.0 | Threshold, scope, behavior |
-| JSON report output | ✅ Complete | 0.1.0 | Schema v1 compliant |
-| Markdown rendering | ✅ Complete | 0.1.0 | PR comments |
-| SARIF output | ✅ Complete | 0.1.0 | 2.1.0 format |
-| GitHub Annotations | ✅ Complete | 0.1.0 | Workflow integration |
-| TOML configuration | ✅ Complete | 0.1.0 | covguard.toml |
-| Ignore directives | ✅ Complete | 0.1.0 | Line/block level |
-| Built-in profiles | ✅ Complete | 0.1.0 | 5 profiles |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Diff parsing (unified) | Shipped | Patch files, git refs |
+| LCOV parsing | Shipped | Full format support |
+| Policy evaluation | Shipped | Threshold, scope, behavior |
+| JSON report output | Shipped | Schema v1 compliant |
+| Markdown rendering | Shipped | PR comments |
+| SARIF output | Shipped | 2.1.0 format |
+| GitHub Annotations | Shipped | Workflow integration |
+| TOML configuration | Shipped | covguard.toml |
+| Ignore directives | Shipped | Line/block level |
+| Built-in profiles | Shipped | 5 profiles |
 
-### Planned Features
+### v0.2.0–0.3.0 Features
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Stdin diff input | Shipped | `--diff-file -` pipe support |
+| Enhanced error messages | Shipped | Remediation hints |
+| Performance profiling | Shipped | `--timing` flag, criterion benchmarks |
+| JaCoCo XML parser | Shipped | Fully wired to CLI + orchestrator |
+| coverage.py JSON parser | Shipped | Fully wired to CLI + orchestrator |
+| GitHub Action | Shipped | Aligned with latest CLI flags |
+| GitLab CI templates | Shipped | Aligned with latest CLI flags |
+
+### Future Features
 
 | Feature | Status | Target | Notes |
 |---------|--------|--------|-------|
-| Stdin diff input | 📋 Planned | 0.2.0 | Pipe support |
-| Enhanced error messages | 🔄 In Progress | 0.2.0 | Remediation hints |
-| Performance profiling | 📋 Planned | 0.2.0 | Large repo optimization |
-| GitHub Action | 📋 Planned | 0.3.0 | Official action |
-| GitLab CI templates | 📋 Planned | 0.3.0 | Integration examples |
-| Alternative coverage formats | 🔍 Investigating | TBD | Jacoco, coverage.py |
-| Global coverage tracking | 💭 Exploring | TBD | Opt-in feature |
-| IDE integration | 💭 Exploring | TBD | VS Code, IntelliJ |
+| Global coverage tracking | Exploring | TBD | Opt-in feature |
+| IDE integration | Exploring | TBD | VS Code, IntelliJ |
 
 ## Release Cadence
 
@@ -176,23 +187,23 @@ See [CHANGELOG.md](../CHANGELOG.md) for detailed changes.
 ### Integration Ecosystem
 | Platform | Status | Integration Type |
 |----------|--------|-----------------|
-| GitHub Actions | 📋 Planned | Official action |
-| GitLab CI | 📋 Planned | Template examples |
-| Bitbucket | 💭 Exploring | Community demand |
-| Azure DevOps | 💭 Exploring | Community demand |
+| GitHub Actions | Shipped | Aligned with latest CLI flags |
+| GitLab CI | Shipped | Aligned with latest CLI flags |
+| Bitbucket | Exploring | Community demand |
+| Azure DevOps | Exploring | Community demand |
 
 ### Language Coverage Tooling
-| Language | Coverage Tool | LCOV Support |
-|----------|--------------|--------------|
-| Rust | cargo-llvm-cov | ✅ Native |
-| C/C++ | gcov | ✅ Native |
-| Python | coverage.py | ✅ Via lcov output |
-| Java | Jacoco | 🔍 Investigating |
-| JavaScript | c8/istanbul | ✅ Via lcov output |
+| Language | Coverage Tool | LCOV Support | Native Format |
+|----------|--------------|--------------|---------------|
+| Rust | cargo-llvm-cov | Shipped | — |
+| C/C++ | gcov | Shipped | — |
+| Python | coverage.py | Via lcov output | Shipped (native JSON) |
+| Java | JaCoCo | Via lcov output | Shipped (native XML) |
+| JavaScript | c8/istanbul | Via lcov output | — |
 
 ## Related Documentation
 
-- [Implementation Plan](implementation-plan.md) - Phase details
-- [Requirements](requirements.md) - Goals and non-goals
-- [Architecture](architecture.md) - System design
-- [Integration Guide](integration.md) - CI/CD setup
+- [Implementation Plan](implementation-plan.md) — Phase details
+- [Requirements](requirements.md) — Goals and non-goals
+- [Architecture](architecture.md) — System design
+- [Integration Guide](integration.md) — CI/CD setup

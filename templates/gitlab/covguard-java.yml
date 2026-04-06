@@ -1,0 +1,160 @@
+# covguard GitLab CI Template for Java
+# =====================================
+# This template provides a complete setup for running covguard
+# with Java projects using JaCoCo for coverage generation.
+#
+# Native JaCoCo XML support is used via the --jacoco flag.
+#
+# Usage:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-java.yml'
+#
+#   covguard:java:
+#     extends: .covguard_java
+
+# Configuration Variables
+# -----------------------
+# JAVA_VERSION          - Java version to use (default: 17)
+# MAVEN_VERSION         - Maven version to use (default: 3.9)
+# THRESHOLD             - Minimum coverage % to pass (optional)
+# SCOPE                 - Line scope: added or touched (default: added)
+# PROFILE               - Config profile: oss, moderate, team, strict, lenient
+# POST_MR_COMMENT       - Post MR comment with results (default: "true")
+# JACOCO_REPORT_PATH    - Path to JaCoCo XML report (default: target/site/jacoco/jacoco.xml)
+# BUILD_TOOL            - Build tool: maven or gradle (default: maven)
+# EXTRA_BUILD_ARGS      - Extra arguments for build tool (default: "")
+
+variables:
+  JAVA_VERSION: "17"
+  MAVEN_VERSION: "3.9"
+  THRESHOLD: ""
+  SCOPE: ""
+  PROFILE: ""
+  POST_MR_COMMENT: "true"
+  JACOCO_REPORT_PATH: "target/site/jacoco/jacoco.xml"
+  BUILD_TOOL: "maven"
+  EXTRA_BUILD_ARGS: ""
+
+# Java coverage job using JaCoCo
+# ------------------------------
+.covguard_java:
+  stage: test
+  image: maven:${MAVEN_VERSION}-eclipse-temurin-${JAVA_VERSION}
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    GIT_DEPTH: 0
+    MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+    MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
+  cache:
+    paths:
+      - .m2/repository/
+  before_script:
+    - |
+      # Install dependencies
+      apt-get update && apt-get install -y curl jq
+
+      # Install Rust toolchain and covguard
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      . "$HOME/.cargo/env"
+      cargo install covguard-cli --locked
+
+      # Set default refs for merge requests
+      if [ -z "$BASE_REF" ]; then
+        export BASE_REF="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-$CI_COMMIT_BEFORE_SHA}"
+      fi
+      if [ -z "$HEAD_REF" ]; then
+        export HEAD_REF="${CI_COMMIT_SHA}"
+      fi
+
+      echo "covguard Java configuration:"
+      echo "  Java version: ${JAVA_VERSION}"
+      echo "  Build tool: ${BUILD_TOOL}"
+      echo "  Base ref: ${BASE_REF}"
+      echo "  Head ref: ${HEAD_REF}"
+      echo "  JaCoCo report: ${JACOCO_REPORT_PATH}"
+  script:
+    - |
+      # Run tests with JaCoCo coverage
+      echo "Running tests with coverage..."
+
+      if [ "${BUILD_TOOL}" = "maven" ]; then
+        mvn ${MAVEN_CLI_OPTS} clean test jacoco:report ${EXTRA_BUILD_ARGS}
+      elif [ "${BUILD_TOOL}" = "gradle" ]; then
+        ./gradlew clean test jacocoTestReport ${EXTRA_BUILD_ARGS}
+        export JACOCO_REPORT_PATH="${JACOCO_REPORT_PATH:-build/reports/jacoco/test/jacocoTestReport.xml}"
+      fi
+
+      # Check if JaCoCo report exists
+      if [ ! -f "${JACOCO_REPORT_PATH}" ]; then
+        echo "Error: JaCoCo report not found at ${JACOCO_REPORT_PATH}"
+        exit 1
+      fi
+
+      # Build covguard arguments
+      COVGUARD_ARGS="check"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --base ${BASE_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --head ${HEAD_REF}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --jacoco ${JACOCO_REPORT_PATH}"
+      COVGUARD_ARGS="${COVGUARD_ARGS} --out ${CI_PROJECT_DIR}/covguard-report.json"
+
+      # Add optional arguments
+      if [ -n "$THRESHOLD" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --threshold ${THRESHOLD}"
+      fi
+
+      if [ -n "$SCOPE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --scope ${SCOPE}"
+      fi
+
+      if [ -n "$PROFILE" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --profile ${PROFILE}"
+      fi
+
+      # Generate markdown output for MR comments
+      if [ "${POST_MR_COMMENT}" = "true" ]; then
+        COVGUARD_ARGS="${COVGUARD_ARGS} --md ${CI_PROJECT_DIR}/covguard-comment.md"
+      fi
+
+      echo "Running: covguard ${COVGUARD_ARGS}"
+      covguard $COVGUARD_ARGS
+  after_script:
+    - |
+      # Post MR comment if enabled and we're in an MR
+      if [ "${POST_MR_COMMENT}" = "true" ] && [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f "${CI_PROJECT_DIR}/covguard-comment.md" ]; then
+        echo "Posting merge request comment..."
+
+        COMMENT_BODY=$(cat "${CI_PROJECT_DIR}/covguard-comment.md" | jq -Rs .)
+
+        curl -s -X POST \
+          -H "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+          -H "Content-Type: application/json" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+          -d "{\"body\": ${COMMENT_BODY}}" || echo "Warning: Failed to post MR comment"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - covguard-report.json
+      - covguard-comment.md
+      - target/site/jacoco/
+    expire_in: 1 week
+
+# Java MR coverage check
+# ----------------------
+covguard:java:mr:
+  extends: .covguard_java
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Java branch coverage check
+# --------------------------
+covguard:java:branch:
+  extends: .covguard_java
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
+    HEAD_REF: "${CI_COMMIT_SHA}"

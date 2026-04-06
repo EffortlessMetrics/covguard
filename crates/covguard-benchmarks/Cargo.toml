@@ -1,0 +1,34 @@
+[package]
+name = "covguard-benchmarks"
+description = "Performance benchmarks for covguard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+rust-version.workspace = true
+
+[[bench]]
+name = "diff_parsing"
+harness = false
+
+[[bench]]
+name = "coverage_parsing"
+harness = false
+
+[[bench]]
+name = "policy_evaluation"
+harness = false
+
+[[bench]]
+name = "report_generation"
+harness = false
+
+[dependencies]
+criterion.workspace = true
+serde_json.workspace = true
+covguard-adapters-diff.workspace = true
+covguard-adapters-coverage.workspace = true
+
+[dev-dependencies]

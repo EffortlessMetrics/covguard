@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "version": "7.4.4",
+    "timestamp": "2024-01-15T10:30:00.000000",
+    "branch_coverage": false
+  },
+  "files": {
+    "src/lib.py": {
+      "executed_lines": [1, 2, 3],
+      "summary": {
+        "covered_lines": 3,
+        "num_statements": 3,
+        "percent_covered": 100.0
+      }
+    }
+  }
+}

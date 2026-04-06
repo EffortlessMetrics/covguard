@@ -1,0 +1,52 @@
+# With Threshold Example
+# ======================
+# This example shows how to configure covguard with coverage thresholds.
+# The pipeline will fail if the diff coverage falls below the threshold.
+
+include:
+  - remote: 'https://raw.githubusercontent.com/EffortlessMetrics/covguard/main/templates/gitlab/covguard-base.yml'
+
+variables:
+  # Path to coverage report
+  COVERAGE_FILE: "coverage/lcov.info"
+  
+  # Fail if diff coverage is below 80%
+  FAIL_THRESHOLD: "80"
+  
+  # Warn if diff coverage is below 90% (but still pass)
+  WARN_THRESHOLD: "90"
+  
+  # Fail if any uncovered lines are found in the diff
+  FAIL_ON_UNCOVERED: "true"
+  
+  # Post a comment on merge requests with the coverage results
+  POST_MR_COMMENT: "true"
+
+# Default job configuration
+covguard:mr:
+  extends: .covguard_base
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Optional: Different thresholds for main branch
+covguard:main:
+  extends: .covguard_base
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    # Stricter threshold for main branch
+    FAIL_THRESHOLD: "90"
+    WARN_THRESHOLD: "95"
+    BASE_REF: "${CI_COMMIT_BEFORE_SHA}"
+    HEAD_REF: "${CI_COMMIT_SHA}"
+
+# Optional: Allow failures for feature branches (soft gate)
+covguard:feature:
+  extends: .covguard_base
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^feature\//
+  allow_failure: true
+  variables:
+    FAIL_THRESHOLD: "70"
+    BASE_REF: "origin/main"
+    HEAD_REF: "${CI_COMMIT_SHA}"

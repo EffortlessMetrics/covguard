@@ -14,6 +14,14 @@ rust-version.workspace = true
 
 [dependencies]
 covguard-orchestrator = { path = "../covguard-orchestrator", version = "0.1.0" }
+covguard-orchestrator-types = { path = "../covguard-orchestrator-types", version = "0.1.0" }
+covguard-ports = { path = "../covguard-ports", version = "0.1.0" }
+covguard-adapters-diff = { path = "../covguard-adapters-diff", version = "0.1.0" }
+covguard-adapters-composite = { path = "../covguard-adapters-composite", version = "0.1.0" }
+covguard-codes = { path = "../covguard-codes", version = "0.1.0" }
+covguard-types = { path = "../covguard-types", version = "0.1.0" }
+thiserror.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true }
