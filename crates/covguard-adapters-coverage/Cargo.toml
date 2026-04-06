@@ -18,6 +18,6 @@ covguard-types = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.6.0"
+proptest = "1.11.0"
 covguard-ports = { workspace = true, features = ["proptest"] }
 serde_json = { workspace = true }
