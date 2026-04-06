@@ -15,7 +15,7 @@ Work toward v0.2.0 (enhanced ergonomics) and v0.3.0 (extended integrations) is i
 - [x] All 20 crates published to crates.io
 - [x] CHANGELOG.md updated for v0.1.0
 - [x] Cargo.toml metadata complete for all crates
-- [x] Installation: `cargo install covguard-cli`
+- [x] Installation: `cargo install covguard`
 
 ### Documentation
 - [x] Project README.md comprehensive update

@@ -52,7 +52,7 @@ variables:
       fi
 
       # Install covguard
-      cargo install covguard-cli --locked
+      cargo install covguard --locked
 
       # Set default refs for merge requests
       if [ -z "$BASE_REF" ]; then
@@ -156,7 +156,7 @@ covguard:rust:branch:
       cargo install cargo-nextest
 
       # Install covguard
-      cargo install covguard-cli --locked
+      cargo install covguard --locked
 
       # Set default refs for merge requests
       if [ -z "$BASE_REF" ]; then

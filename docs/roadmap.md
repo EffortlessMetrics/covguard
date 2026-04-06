@@ -1,6 +1,6 @@
 # covguard Roadmap
 
-[![crates.io](https://img.shields.io/crates/v/covguard-cli)](https://crates.io/crates/covguard-cli)
+[![crates.io](https://img.shields.io/crates/v/covguard)](https://crates.io/crates/covguard)
 
 ## Vision
 

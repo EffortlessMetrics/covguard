@@ -1,7 +1,7 @@
 # covguard
 
-[![crates.io](https://img.shields.io/crates/v/covguard-cli)](https://crates.io/crates/covguard-cli)
-[![docs.rs](https://docs.rs/covguard-cli/badge.svg)](https://docs.rs/covguard-cli)
+[![crates.io](https://img.shields.io/crates/v/covguard)](https://crates.io/crates/covguard)
+[![docs.rs](https://docs.rs/covguard/badge.svg)](https://docs.rs/covguard)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/EffortlessMetrics/covguard/workflows/CI/badge.svg)](https://github.com/EffortlessMetrics/covguard/actions/workflows/ci.yml)
 
@@ -28,10 +28,10 @@ It answers one question:
 ### From crates.io
 
 ```bash
-cargo install covguard-cli
+cargo install covguard
 ```
 
-This installs the `covguard` binary (published as `covguard-cli` on crates.io).
+This installs the `covguard` binary.
 
 ### From source
 
@@ -308,7 +308,7 @@ coverage-gate:
   stage: test
   image: rust:latest
   script:
-    - cargo install cargo-llvm-cov covguard-cli
+    - cargo install cargo-llvm-cov covguard
     - cargo llvm-cov --lcov --output-path lcov.info
     - covguard check
         --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
@@ -351,7 +351,7 @@ exit $?
 
 ## Documentation
 
-- **API Documentation**: [docs.rs/covguard-cli](https://docs.rs/covguard-cli)
+- **API Documentation**: [docs.rs/covguard](https://docs.rs/covguard)
 - **Requirements**: [`docs/requirements.md`](docs/requirements.md)
 - **Design**: [`docs/design.md`](docs/design.md)
 - **Architecture**: [`docs/architecture.md`](docs/architecture.md)
@@ -363,7 +363,7 @@ exit $?
 
 | Crate | Description |
 |-------|-------------|
-| [`covguard-cli`](crates/covguard-cli) | CLI binary |
+| [`covguard-cli`](crates/covguard-cli) | CLI binary crate |
 | [`covguard-orchestrator`](crates/covguard-orchestrator) | Orchestration layer |
 | [`covguard-app`](crates/covguard-app) | Compatibility facade |
 | [`covguard-domain`](crates/covguard-domain) | Pure policy evaluation |
