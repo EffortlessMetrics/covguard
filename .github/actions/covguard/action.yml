@@ -71,6 +71,10 @@ inputs:
     description: 'Path to write the markdown comment (relative to workspace)'
     required: false
     default: 'artifacts/covguard/comment.md'
+  diagnostics-output:
+    description: 'Optional path to write reconciliation diagnostics (relative to workspace)'
+    required: false
+    default: ''
   token:
     description: 'GitHub token for PR comments (uses GITHUB_TOKEN by default)'
     required: false
@@ -110,6 +114,9 @@ outputs:
   comment-path:
     description: 'Path to the generated markdown comment'
     value: ${{ steps.covguard.outputs.comment_path }}
+  diagnostics-path:
+    description: 'Path to generated reconciliation diagnostics (if enabled)'
+    value: ${{ steps.covguard.outputs.diagnostics_path }}
   sarif-path:
     description: 'Path to the generated SARIF file (if enabled and produced)'
     value: ${{ steps.covguard.outputs.sarif_path }}
@@ -157,6 +164,7 @@ runs:
         INPUT_SARIF_OUTPUT: ${{ inputs.sarif-output }}
         INPUT_REPORT_OUTPUT: ${{ inputs.report-output }}
         INPUT_MARKDOWN_OUTPUT: ${{ inputs.markdown-output }}
+        INPUT_DIAGNOSTICS_OUTPUT: ${{ inputs.diagnostics-output }}
         INPUT_ARTIFACT_NAME: ${{ inputs.artifact-name }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
         INPUT_CONFIG_FILE: ${{ inputs.config-file }}
@@ -174,6 +182,7 @@ runs:
         REPORT_OUTPUT="$INPUT_REPORT_OUTPUT"
         MARKDOWN_OUTPUT="$INPUT_MARKDOWN_OUTPUT"
         SARIF_OUTPUT=""
+        DIAGNOSTICS_OUTPUT="$INPUT_DIAGNOSTICS_OUTPUT"
         ARTIFACT_NAME="$INPUT_ARTIFACT_NAME"
         DEFAULT_REPORT_OUTPUT="artifacts/covguard/report.json"
         DEFAULT_MARKDOWN_OUTPUT="artifacts/covguard/comment.md"
@@ -184,6 +193,9 @@ runs:
 
         if [ -z "$MARKDOWN_OUTPUT" ] || [ "$MARKDOWN_OUTPUT" = "$DEFAULT_MARKDOWN_OUTPUT" ]; then
           MARKDOWN_OUTPUT="artifacts/covguard/comment-${UNIQUE_SUFFIX}.md"
+        fi
+        if [ -z "$DIAGNOSTICS_OUTPUT" ]; then
+          DIAGNOSTICS_OUTPUT="artifacts/covguard/diagnostics-${UNIQUE_SUFFIX}.json"
         fi
 
         if [ -z "$ARTIFACT_NAME" ] || [ "$ARTIFACT_NAME" = "covguard-report" ]; then
@@ -306,6 +318,11 @@ runs:
           UNCOVERED_LINES=$(jq -r '.data.uncovered_lines // 0' "$REPORT_OUTPUT")
           COVERED_LINES=$(jq -r '.data.covered_lines // 0' "$REPORT_OUTPUT")
           TOTAL_LINES=$(jq -r '.data.changed_lines_total // 0' "$REPORT_OUTPUT")
+          TOTAL_FINDINGS=$(jq '(.findings | length)' "$REPORT_OUTPUT")
+          CRITICAL_FINDINGS=$(jq '[.findings[] | select(.severity=="error")] | length' "$REPORT_OUTPUT")
+          WARN_FINDINGS=$(jq '[.findings[] | select(.severity=="warn")] | length' "$REPORT_OUTPUT")
+          INFO_FINDINGS=$(jq '[.findings[] | select(.severity=="info")] | length' "$REPORT_OUTPUT")
+          FINDING_CODES=$(jq '[.findings[]?.code] | reduce .[] as $code ({}; .[$code] += 1) | to_entries | sort_by(.key) | map({code: .key, count: .value})' "$REPORT_OUTPUT")
 
           PASSED="false"
           if [ "$STATUS" = "pass" ] || [ "$STATUS" = "skip" ]; then
@@ -321,8 +338,30 @@ runs:
           echo "report_path=$REPORT_OUTPUT" >> $GITHUB_OUTPUT
           echo "comment_path=$MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
           echo "sarif_path=$SARIF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "diagnostics_path=$DIAGNOSTICS_OUTPUT" >> $GITHUB_OUTPUT
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
+          # Write a diagnostics artifact that explains findings and missing coverage behavior
+          cat > "$DIAGNOSTICS_OUTPUT" <<EOF
+{
+  "report_path": "$REPORT_OUTPUT",
+  "passed": "$PASSED",
+  "coverage_percent": $COVERAGE_PERCENT,
+  "uncovered_lines": $UNCOVERED_LINES,
+  "covered_lines": $COVERED_LINES,
+  "total_lines": $TOTAL_LINES,
+  "status": "$STATUS",
+  "summary": {
+    "total_findings": $TOTAL_FINDINGS,
+    "critical_findings": $CRITICAL_FINDINGS,
+    "warn_findings": $WARN_FINDINGS,
+    "info_findings": $INFO_FINDINGS
+  },
+  "finding_codes": $FINDING_CODES
+}
+EOF
         else
+          STATUS="error"
           echo "passed=false" >> $GITHUB_OUTPUT
           echo "coverage_percent=0" >> $GITHUB_OUTPUT
           echo "uncovered_lines=0" >> $GITHUB_OUTPUT
@@ -331,7 +370,27 @@ runs:
           echo "report_path=$REPORT_OUTPUT" >> $GITHUB_OUTPUT
           echo "comment_path=$MARKDOWN_OUTPUT" >> $GITHUB_OUTPUT
           echo "sarif_path=$SARIF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "diagnostics_path=$DIAGNOSTICS_OUTPUT" >> $GITHUB_OUTPUT
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
+          cat > "$DIAGNOSTICS_OUTPUT" <<EOF
+{
+  "report_path": "$REPORT_OUTPUT",
+  "passed": "false",
+  "coverage_percent": 0,
+  "uncovered_lines": 0,
+  "covered_lines": 0,
+  "total_lines": 0,
+  "status": "$STATUS",
+  "summary": {
+    "total_findings": 0,
+    "critical_findings": 0,
+    "warn_findings": 0,
+    "info_findings": 0
+  },
+  "finding_codes": []
+}
+EOF
         fi
 
         # Exit with covguard's exit code
@@ -343,7 +402,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.token || github.token }}
         COMMENT_MODE: ${{ inputs.comment-mode }}
-        MARKDOWN_PATH: ${{ inputs.markdown-output }}
+        MARKDOWN_PATH: ${{ steps.covguard.outputs.comment_path }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PASSED: ${{ steps.covguard.outputs.passed }}
@@ -409,4 +468,5 @@ runs:
         path: |
           ${{ steps.covguard.outputs.report_path }}
           ${{ steps.covguard.outputs.comment_path }}
+          ${{ steps.covguard.outputs.diagnostics_path }}
         retention-days: 30
