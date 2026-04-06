@@ -132,7 +132,7 @@ Blocking vs informational behavior belongs in cockpit policy, not in covguard.
 ### From crates.io
 
 ```bash
-cargo install covguard-cli
+cargo install covguard
 ```
 
 ### From source

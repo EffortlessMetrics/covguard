@@ -59,7 +59,7 @@ variables:
       # Install Rust toolchain and covguard
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       . "$HOME/.cargo/env"
-      cargo install covguard-cli --locked
+      cargo install covguard --locked
 
       # Set default refs for merge requests
       if [ -z "$BASE_REF" ]; then

@@ -98,10 +98,10 @@ Missing inputs:
 ### From crates.io
 
 ```bash
-cargo install covguard-cli
+cargo install covguard
 ```
 
-The CLI binary is published as `covguard-cli` on [crates.io](https://crates.io/crates/covguard-cli).
+The CLI binary is published as `covguard` on [crates.io](https://crates.io/crates/covguard).
 
 ### Library Usage
 

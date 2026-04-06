@@ -93,6 +93,7 @@ jobs:
 | `profile` | Built-in coverage policy profile | No | `""` |
 | `report-output` | Path for JSON report | No | `artifacts/covguard/report.json` |
 | `markdown-output` | Path for markdown comment | No | `artifacts/covguard/comment.md` |
+| `diagnostics-output` | Optional diagnostics JSON path (`report_path`, findings distribution, exit status) | No | auto-generated per invocation (`artifacts/covguard/diagnostics-<run>.json`) |
 | `token` | GitHub token for PR comments | No | `""` (falls back to `github.token`) |
 | `working-directory` | Working directory for commands | No | `.` |
 | `config-file` | Path to covguard.toml configuration file | No | — |
@@ -108,6 +109,7 @@ jobs:
 | `total-lines` | Total number of changed lines |
 | `report-path` | Path to the generated JSON report |
 | `comment-path` | Path to the generated markdown comment |
+| `diagnostics-path` | Path to generated diagnostics JSON |
 
 ### Using Outputs
 
