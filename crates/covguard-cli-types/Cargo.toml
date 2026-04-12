@@ -11,6 +11,6 @@ categories.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-clap = { version = "4.5.23", features = ["derive"] }
+clap = { version = "4.6.0", features = ["derive"] }
 covguard-config = { workspace = true }
 serde = { workspace = true }
