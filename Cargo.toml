@@ -88,16 +88,16 @@ covguard-cli-core = { path = "crates/covguard-cli-core", version = "0.1.0" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-toml = "1.0.6"
+toml = "1.1.2"
 thiserror = "2.0.18"
 chrono = { version = "0.4.44", features = ["serde"] }
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 glob = "0.3.3"
-insta = { version = "1.46.3", features = ["json"] }
-cucumber = "0.22.1"
+insta = { version = "1.47.2", features = ["json"] }
+cucumber = "0.23.0"
 futures = "0.3.32"
-uselesskey = { version = "0.2.0", default-features = false, features = ["rsa"] }
-criterion = "0.5"
+uselesskey = { version = "0.6.0", default-features = false, features = ["rsa"] }
+criterion = "0.8"
 
 [profile.release]
 debug = true  # Enable debug symbols for profiling
