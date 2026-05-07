@@ -4,12 +4,16 @@
 [![docs.rs](https://docs.rs/covguard/badge.svg)](https://docs.rs/covguard)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/EffortlessMetrics/covguard/workflows/CI/badge.svg)](https://github.com/EffortlessMetrics/covguard/actions/workflows/ci.yml)
+[![Coverage](https://github.com/EffortlessMetrics/covguard/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/EffortlessMetrics/covguard/actions/workflows/coverage.yml)
+[![Codecov](https://codecov.io/gh/EffortlessMetrics/covguard/branch/main/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/covguard)
 
 **covguard** is a diff-scoped coverage gate for pull requests.
 
 It answers one question:
 
 > Did this PR add or change lines that are not covered by tests?
+
+Codecov is repository execution-surface telemetry only; see [Coverage](docs/ci/coverage.md) for what the badge does and does not claim.
 
 ## Features
 
