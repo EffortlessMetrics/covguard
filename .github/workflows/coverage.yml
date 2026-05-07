@@ -94,92 +94,6 @@ jobs:
           test -s coverage.txt
           test -s lcov.info
 
-      - name: Detect Codecov token
-        id: codecov-token
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          if [ -n "${CODECOV_TOKEN:-}" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload coverage to Codecov (main)
-        if: ${{ always() && github.event_name == 'push' && hashFiles('lcov.info') != '' && steps.codecov-token.outputs.present == 'true' }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info
-          flags: rust-core
-          name: covguard-rust-core
-          fail_ci_if_error: true
-
-      - name: Upload coverage to Codecov (advisory)
-        if: ${{ always() && github.event_name != 'push' && hashFiles('lcov.info') != '' && steps.codecov-token.outputs.present == 'true' }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info
-          flags: rust-core
-          name: covguard-rust-core
-          fail_ci_if_error: false
-
-      - name: Write coverage receipt
-        if: always()
-        run: |
-          mkdir -p target/coverage
-          python3 - <<'PY'
-          import json
-          import pathlib
-          receipt = {
-              "schema_version": 1,
-              "repo": "covguard",
-              "lane": "coverage",
-              "tool": "cargo-llvm-cov",
-              "flag": "rust-core",
-              "workflow": "Coverage",
-              "artifacts": {
-                  "coverage_json": pathlib.Path("coverage.json").exists(),
-                  "coverage_text": pathlib.Path("coverage.txt").exists(),
-                  "lcov": pathlib.Path("lcov.info").exists(),
-              },
-              "claim_boundary": [
-                  "execution_surface_only",
-                  "not_diff_coverage_policy_correctness",
-                  "not_lcov_parser_correctness",
-                  "not_diff_parser_correctness",
-                  "not_ignore_directive_correctness",
-                  "not_renderer_completeness",
-                  "not_schema_conformance",
-                  "not_mutation_adequacy",
-                  "not_fuzz_robustness",
-                  "not_release_readiness"
-              ],
-          }
-          pathlib.Path("target/coverage/coverage-receipt.json").write_text(
-              json.dumps(receipt, indent=2) + "\n",
-              encoding="utf-8",
-          )
-          PY
-
-      - name: Summarize coverage artifacts
-        if: always()
-        run: |
-          {
-            echo "## Coverage"
-            echo ""
-            echo "| Artifact | Present |"
-            echo "| --- | ---: |"
-            echo "| coverage.json | $([ -s coverage.json ] && echo yes || echo no) |"
-            echo "| coverage.txt | $([ -s coverage.txt ] && echo yes || echo no) |"
-            echo "| lcov.info | $([ -s lcov.info ] && echo yes || echo no) |"
-            echo "| coverage-receipt.json | $([ -s target/coverage/coverage-receipt.json ] && echo yes || echo no) |"
-            echo ""
-            echo "Codecov flag: \`rust-core\`"
-            echo "Claim boundary: Rust execution-surface evidence only."
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -189,5 +103,4 @@ jobs:
             coverage.json
             coverage.txt
             lcov.info
-            target/coverage/coverage-receipt.json
           retention-days: 14
