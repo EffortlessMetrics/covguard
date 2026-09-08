@@ -16,5 +16,6 @@ index 1111111..2222222 100644
 
     let ranges = parse_patch(diff).unwrap();
     let file_ranges = ranges.get("src/lib.rs").expect("ranges for src/lib.rs");
-    assert_eq!(file_ranges, &vec![1..=3]);
+    let expected = 1..=3;
+    assert_eq!(file_ranges.as_slice(), std::slice::from_ref(&expected));
 }
