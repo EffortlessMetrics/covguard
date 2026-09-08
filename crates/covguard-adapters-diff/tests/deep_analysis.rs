@@ -12,6 +12,14 @@ fn fixture_path(relative: &str) -> String {
     format!("{}/../../{}", WORKSPACE_ROOT, relative)
 }
 
+fn assert_single_range(
+    ranges: &[std::ops::RangeInclusive<u32>],
+    expected: std::ops::RangeInclusive<u32>,
+    message: &str,
+) {
+    assert_eq!(ranges, std::slice::from_ref(&expected), "{}", message);
+}
+
 /// Helper to print parsed results
 fn print_result(name: &str, result: &covguard_adapters_diff::DiffParseResult) {
     println!("\n=== {} ===", name);
@@ -42,11 +50,7 @@ fn test_fixture_simple_added() {
         "Expected src/lib.rs in changed_ranges"
     );
     let ranges = result.changed_ranges.get("src/lib.rs").unwrap();
-    assert_eq!(
-        ranges.as_slice(),
-        &[1..=3],
-        "Expected lines 1-3 to be added"
-    );
+    assert_single_range(ranges, 1..=3, "Expected lines 1-3 to be added");
     assert!(result.binary_files.is_empty(), "Expected no binary files");
 }
 
@@ -85,27 +89,19 @@ fn test_fixture_multiple_files() {
 
     // lib.rs: lines 1-3 added (mod calculator, mod validator, blank line)
     let lib_ranges = result.changed_ranges.get("src/lib.rs").unwrap();
-    assert_eq!(
-        lib_ranges.as_slice(),
-        &[1..=3],
-        "Expected lines 1-3 in src/lib.rs"
-    );
+    assert_single_range(lib_ranges, 1..=3, "Expected lines 1-3 in src/lib.rs");
 
     // calculator.rs: lines 1-11 added
     let calc_ranges = result.changed_ranges.get("src/calculator.rs").unwrap();
-    assert_eq!(
-        calc_ranges.as_slice(),
-        &[1..=11],
-        "Expected lines 1-11 in src/calculator.rs"
+    assert_single_range(
+        calc_ranges,
+        1..=11,
+        "Expected lines 1-11 in src/calculator.rs",
     );
 
     // validator.rs: lines 1-7 added
     let val_ranges = result.changed_ranges.get("src/validator.rs").unwrap();
-    assert_eq!(
-        val_ranges.as_slice(),
-        &[1..=7],
-        "Expected lines 1-7 in src/validator.rs"
-    );
+    assert_single_range(val_ranges, 1..=7, "Expected lines 1-7 in src/validator.rs");
 }
 
 #[test]
@@ -165,10 +161,10 @@ fn test_fixture_binary_file() {
     );
 
     let config_ranges = result.changed_ranges.get("src/config.rs").unwrap();
-    assert_eq!(
-        config_ranges.as_slice(),
-        &[3..=4],
-        "Expected lines 3-4 in src/config.rs"
+    assert_single_range(
+        config_ranges,
+        3..=4,
+        "Expected lines 3-4 in src/config.rs",
     );
 }
 
@@ -187,10 +183,10 @@ fn test_fixture_with_ignore_directive() {
     assert!(result.changed_ranges.contains_key("src/lib.rs"));
     let ranges = result.changed_ranges.get("src/lib.rs").unwrap();
     // All 3 lines are added (including the one with covguard: ignore)
-    assert_eq!(
-        ranges.as_slice(),
-        &[1..=3],
-        "Expected lines 1-3 (ignore directive is not parsed by diff parser)"
+    assert_single_range(
+        ranges,
+        1..=3,
+        "Expected lines 1-3 (ignore directive is not parsed by diff parser)",
     );
 }
 
@@ -244,11 +240,7 @@ index 0000000..1111111\r\n\
     println!("\n--- crlf_endings analysis ---");
     println!("Result: {:?}", result);
     let ranges = result.get("src/lib.rs").expect("Expected src/lib.rs");
-    assert_eq!(
-        ranges.as_slice(),
-        &[1..=2],
-        "CRLF endings should be handled correctly"
-    );
+    assert_single_range(ranges, 1..=2, "CRLF endings should be handled correctly");
 }
 
 #[test]
@@ -269,10 +261,10 @@ index 0000000..1111111 100644
     let ranges = result.get("src/huge.rs").expect("Expected src/huge.rs");
     // The hunk starts at line 999999 in the new file, with 2 context lines
     // then lines 1000000 and 1000001 are added
-    assert_eq!(
-        ranges.as_slice(),
-        &[1000001..=1000002],
-        "Large line numbers should be handled correctly"
+    assert_single_range(
+        ranges,
+        1000001..=1000002,
+        "Large line numbers should be handled correctly",
     );
 }
 
@@ -342,11 +334,7 @@ index 0000000..1111111
     println!("\n--- no_newline_marker analysis ---");
     println!("Result: {:?}", result);
     let ranges = result.get("src/lib.rs").expect("Expected src/lib.rs");
-    assert_eq!(
-        ranges.as_slice(),
-        &[1..=2],
-        "No newline marker should be ignored"
-    );
+    assert_single_range(ranges, 1..=2, "No newline marker should be ignored");
 }
 
 #[test]
@@ -389,11 +377,7 @@ index 1111111..2222222 100644
     println!("Result: {:?}", result);
     // Lines 2 and 3 are added (new_code and extra_code)
     let ranges = result.get("src/lib.rs").expect("Expected src/lib.rs");
-    assert_eq!(
-        ranges.as_slice(),
-        &[2..=3],
-        "Expected lines 2-3 to be added"
-    );
+    assert_single_range(ranges, 2..=3, "Expected lines 2-3 to be added");
 }
 
 // ============================================================================
